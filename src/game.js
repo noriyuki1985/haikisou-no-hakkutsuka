@@ -1,0 +1,752 @@
+// --- game.js ---
+function createGameApp(elements) {
+  const renderer = createRenderer(elements);
+  const game = GameState.createInitialGame();
+
+  function render() {
+    renderer.render(game);
+  }
+
+  function endMessage() {
+    World.addLog(game, "Nキーで新しい発掘を開始できる。 ");
+    render();
+  }
+
+  function persistUiSettings() {
+    saveSettings({ difficulty: DIFFICULTY.current, tutorialSeen: game.tutorialSeen, storySeen: game.storySeen, endingSeen: game.endingSeen });
+  }
+
+  function appendRunLog(result) {
+    if (!FEATURES.runRecords) return;
+    const label = result === "clear" ? "浄水コア回収" : result === "return" ? "途中帰還" : "回収不能";
+    const floorName = FLOOR_EVENT_DEFS[game.floorEvent]?.name || "通常稼働";
+    const cause = result === "death" ? (game.lastDeathCause || "原因不明") : result === "return" ? "任意帰還" : "浄水コア回収";
+    const detail = [
+      `撃破${game.debug.enemyDefeatCount}`,
+      `使用${game.debug.useCount}`,
+      `投擲${game.debug.throwCount}`,
+      `罠${game.debug.trapTriggeredCount}`,
+      `最大汚染${game.player.pollution}`,
+      `フロア:${floorName}`,
+      `結果:${cause}`
+    ].join(" / ");
+    const entry = {
+      version: VERSION,
+      result,
+      depth: game.depth,
+      turns: game.turn,
+      floorEvent: floorName,
+      cause,
+      stats: {
+        defeated: game.debug.enemyDefeatCount,
+        used: game.debug.useCount,
+        thrown: game.debug.throwCount,
+        traps: game.debug.trapTriggeredCount,
+        searched: game.debug.searchCount,
+        maxPollution: game.player.pollution
+      },
+      detail,
+      summary: `${label}: 深度${game.depth} / ${game.turn}ターン / ${detail}`
+    };
+    if (!Array.isArray(game.settlement.runLogs)) game.settlement.runLogs = [];
+    game.settlement.runLogs.unshift(entry);
+    game.settlement.runLogs = game.settlement.runLogs.slice(0, CONFIG.runLogMax);
+  }
+
+  function runInputAllowed() {
+    if (game.helpOpen) {
+      World.addLog(game, "ヘルプを閉じてから操作する。 ");
+      render();
+      return false;
+    }
+    if (game.tutorialOpen) {
+      World.addLog(game, "初回ガイドを閉じてから操作する。 ");
+      render();
+      return false;
+    }
+    if (game.storyOpen || game.endingOpen || game.runRecordOpen || game.npcDialog) {
+      World.addLog(game, "会話/ストーリーを閉じてから操作する。 ");
+      render();
+      return false;
+    }
+    if (game.runMenuOpen) {
+      World.addLog(game, "探索メニューを閉じてから操作する。 ");
+      render();
+      return false;
+    }
+    if (game.screen !== "run") {
+      World.addLog(game, "Enterで探索を開始する。Bで拠点を確認できる。 ");
+      render();
+      return false;
+    }
+    return true;
+  }
+
+  function openRunScreen() {
+    game.screen = "run";
+    game.hasStarted = true;
+    if (!game.tutorialSeen) game.tutorialOpen = true;
+  }
+
+  function applySettlementBonuses() {
+    // v10.0.0: 持ち帰り再利用・拠点強化ボーナスは無効。
+  }
+
+  function rewardMissions() {
+    if (!FEATURES.missions) return;
+    for (const mission of Object.values(MISSION_DEFS)) {
+      if (game.completedMissions[mission.key]) continue;
+      if (!mission.done(game)) continue;
+      game.completedMissions[mission.key] = true;
+      game.debug.missionRewardCount++;
+      World.addLog(game, `依頼達成: ${mission.title}。記録に反映した。`);
+    }
+  }
+
+  function settleRunResult(result = "death") {
+    if (!FEATURES.settlement || game.resultSettled) return;
+    game.lastResult = result;
+    game.settlement.runs++;
+    rewardMissions();
+    game.settlement.bestDepth = Math.max(game.settlement.bestDepth, game.depth);
+    if (result === "clear") {
+      game.settlement.cores++;
+      appendRunLog("clear");
+      World.addLog(game, "浄水コア回収を発掘記録へ残した。");
+    } else if (result === "return") {
+      appendRunLog("return");
+      World.addLog(game, "途中帰還を発掘記録へ残した。アイテムは持ち帰らない。");
+    } else {
+      appendRunLog("death");
+      World.addLog(game, "今回の発掘は回収不能として記録された。 ");
+    }
+    game.resultSettled = true;
+    saveSettlement(game.settlement);
+  }
+
+  function triggerGameOver(message) {
+    if (game.isGameOver || game.isClear) return;
+    game.isGameOver = true;
+    game.lastDeathCause = String(message || "回収不能").replace(/Nキー.*$/, "").trim();
+    World.addLog(game, message);
+    settleRunResult("death");
+  }
+
+  function finishReturn(message = "発掘を切り上げ、拠点へ帰還した。") {
+    if (game.resultSettled || game.isGameOver || game.isClear) return endMessage();
+    game.isReturned = true;
+    game.lastDeathCause = "任意帰還";
+    World.addLog(game, message);
+    settleRunResult("return");
+    game.screen = "base";
+    VisibilitySystem.update(game);
+    render();
+  }
+
+  function manualReturn() {
+    if (!runInputAllowed()) return;
+    if (game.isGameOver || game.isClear || game.resultSettled) return endMessage();
+    finishReturn("発掘家はこれ以上の深入りをやめ、拠点へ帰還した。");
+  }
+
+  function acquireCore() {
+    if (!game.core.active || game.core.acquired) return;
+    if (game.terminals?.some(t => t.active)) {
+      World.addLog(game, "防衛端末が浄水コアの固定を維持している。端末をすべて停止する必要がある。");
+      render();
+      return;
+    }
+    if (game.enemies.some(enemy => enemy.type === "guardian")) {
+      World.addLog(game, "中枢防衛機がコアの取り外しを妨害している。先に停止させる必要がある。");
+      render();
+      return;
+    }
+    game.core.acquired = true;
+    game.lastDeathCause = "浄水コア回収";
+    game.core.active = false;
+    game.map[game.player.y][game.player.x] = TILE.FLOOR;
+    game.isClear = true;
+    game.debug.clearCount++;
+    World.recordCodex(game, "goal:core", "浄水コア", "集落の浄水装置を延命できる中核部品。発掘家が命を賭ける理由。 ");
+    World.addLog(game, "浄水コアを回収した。集落へ帰還する。 ");
+    settleRunResult("clear");
+    game.endingOpen = true;
+    game.endingPage = 0;
+    game.endingSeen = true;
+    persistUiSettings();
+    VisibilitySystem.update(game);
+    render();
+  }
+
+  function operateTerminal() {
+    const terminal = game.terminals.find(t => t.active && t.x === game.player.x && t.y === game.player.y);
+    if (!terminal) return false;
+    terminal.active = false;
+    game.disabledTerminals = (game.disabledTerminals || 0) + 1;
+    game.debug.terminalUseCount++;
+    game.map[terminal.y][terminal.x] = TILE.FLOOR;
+    for (const enemy of game.enemies) {
+      if (enemy.type === "guardian") enemy.stun = Math.max(enemy.stun || 0, 2);
+    }
+    World.addLog(game, `中枢防衛端末を停止した。残り ${game.terminals.filter(t => t.active).length}。`);
+    World.recordCodex(game, "boss:terminal", "中枢防衛端末", "防衛機と浄水コアを守る旧文明端末。全停止でコアを取り外せる。 ");
+    return true;
+  }
+
+  function moveToNextDepth() {
+    game.depth++;
+    game.settlement.bestDepth = Math.max(game.settlement.bestDepth, game.depth);
+    MapSystem.generate(game);
+    World.addLog(game, game.depth >= CONFIG.maxDepth ? "搬送リフトが最深層で停止した。浄水コアを探せ。" : `搬送リフトが稼働した。深度 ${game.depth} へ移動した。`);
+    if (FEATURES.floorEvents) World.addLog(game, `フロアイベント: ${FLOOR_EVENT_DEFS[game.floorEvent]?.name || "通常稼働"}。`);
+    if (FEATURES.bossTerminals && game.depth >= CONFIG.maxDepth) World.addLog(game, "中枢防衛端末をすべて停止し、防衛機を沈黙させてからコアを回収する。 ");
+    game.turn++;
+    TurnSystem.applySurvivalTick(game, { reason: "lift" }, triggerGameOver);
+    VisibilitySystem.update(game);
+    render();
+  }
+
+  function canMoveDiagonal(dx, dy) {
+    if (dx === 0 || dy === 0) return true;
+    if (!FEATURES.diagonal) return false;
+    if (World.getTile(game, game.player.x + dx, game.player.y) === TILE.WALL && World.getTile(game, game.player.x, game.player.y + dy) === TILE.WALL) return false;
+    return true;
+  }
+
+  function commitPlayerTurn(context = {}) {
+    TurnSystem.playerTurn(game, context, triggerGameOver);
+    render();
+  }
+
+  function waitTurn() {
+    if (!runInputAllowed()) return;
+    if (!FEATURES.waitRest) {
+      World.addLog(game, "足踏みはv2.4.0から。 ");
+      render();
+      return;
+    }
+    if (game.isGameOver || game.isClear) return endMessage();
+    World.addLog(game, "その場で様子を見る。 ");
+    commitPlayerTurn({ reason: "wait" });
+  }
+
+  function movePlayer(dx, dy) {
+    if (dx === 0 && dy === 0) return waitTurn();
+    if (!runInputAllowed()) return;
+    if (game.isGameOver || game.isClear) return endMessage();
+    if (game.player.immobilizedTurns > 0) {
+      World.addLog(game, "身体を固定されて動けない。 ");
+      commitPlayerTurn({ reason: "blocked" });
+      return;
+    }
+    if (!canMoveDiagonal(dx, dy)) {
+      World.addLog(game, "斜め方向にはまだ動けない、または角が塞がっている。 ");
+      render();
+      return;
+    }
+    const nextX = game.player.x + dx;
+    const nextY = game.player.y + dy;
+    game.player.lastDir = { x: dx, y: dy };
+    if (!World.isWalkable(game, nextX, nextY)) {
+      World.addLog(game, "壁や廃材に進路を阻まれた。 ");
+      render();
+      return;
+    }
+    const enemy = World.getEnemyAt(game, nextX, nextY);
+    if (enemy) {
+      EnemySystem.attackEnemy(game, enemy);
+      commitPlayerTurn({ reason: "attack" });
+      return;
+    }
+    game.player.x = nextX;
+    game.player.y = nextY;
+    MapSystem.handleRoomEntry(game);
+    TrapSystem.trigger(game, triggerGameOver);
+    if (game.isGameOver || game.isClear) {
+      VisibilitySystem.update(game);
+      render();
+      return;
+    }
+    const item = World.getItemAt(game, game.player.x, game.player.y);
+    if (item) World.addLog(game, `${ItemSystem.getItemName(game, item)}が落ちている。Gキーで拾える。`);
+    const tile = World.getTile(game, game.player.x, game.player.y);
+    if (tile === TILE.LIFT) return moveToNextDepth();
+    if (tile === TILE.CORE) return acquireCore();
+    if (tile === TILE.TERMINAL && operateTerminal()) return commitPlayerTurn({ reason: "terminal" });
+    commitPlayerTurn({ reason: "move" });
+  }
+
+  function pickupItemAtPlayer() {
+    if (!runInputAllowed()) return;
+    if (game.isGameOver || game.isClear) return endMessage();
+    if (ItemSystem.pickupAtPlayer(game)) commitPlayerTurn({ reason: "pickup" });
+    else render();
+  }
+
+  function contextPickupOrUse() {
+    if (!runInputAllowed()) return;
+    if (game.isGameOver || game.isClear) return endMessage();
+    if (World.getItemAt(game, game.player.x, game.player.y)) {
+      pickupItemAtPlayer();
+    } else {
+      useSelectedInventoryItem();
+    }
+  }
+
+  function useInventoryItem(index) {
+    if (!runInputAllowed()) return;
+    if (game.isGameOver || game.isClear) return endMessage();
+    if (ItemSystem.useInventoryItem(game, index)) {
+      if (game.pendingExtract) {
+        game.pendingExtract = false;
+        finishReturn("緊急帰還タグを使い、発掘を切り上げた。");
+        return;
+      }
+      commitPlayerTurn({ reason: "use" });
+    } else render();
+  }
+
+  function selectInventory(delta) {
+    ItemSystem.selectInventory(game, delta);
+    render();
+  }
+
+  function dropSelectedItem() {
+    if (!runInputAllowed()) return;
+    if (game.isGameOver || game.isClear) return endMessage();
+    if (ItemSystem.dropSelected(game)) commitPlayerTurn({ reason: "drop" });
+    else render();
+  }
+
+  function throwSelectedItem() {
+    if (!runInputAllowed()) return;
+    if (game.isGameOver || game.isClear) return endMessage();
+    if (ItemSystem.throwSelected(game)) commitPlayerTurn({ reason: "throw" });
+    else render();
+  }
+
+  function searchAround() {
+    if (!runInputAllowed()) return;
+    if (game.isGameOver || game.isClear) return endMessage();
+    if (TrapSystem.searchAround(game)) commitPlayerTurn({ reason: "search" });
+    else render();
+  }
+
+  function upgradeBase() {
+    World.addLog(game, "v10.0.0では拠点強化とアイテム再利用は無効。発掘中の判断だけで進める。 ");
+    render();
+  }
+
+  function cycleDifficulty() {
+    const order = ["clear", "blind"];
+    const next = order[(order.indexOf(DIFFICULTY.current) + 1) % order.length];
+    DIFFICULTY.current = next;
+    World.addLog(game, `識別設定を${currentDifficulty().name}に変更。次回以降の発掘に反映。`);
+    persistUiSettings();
+    render();
+  }
+
+  function regenerateArea() {
+    if (!runInputAllowed()) return;
+    if (game.isGameOver || game.isClear) return endMessage();
+    MapSystem.generate(game);
+    World.addLog(game, "AIが廃棄区域を再構成した。深度とターンは変化しない。 ");
+    render();
+  }
+
+  function resetRunState(keepSettlement = true) {
+    const settlement = keepSettlement ? game.settlement : createDefaultSettlement();
+    const restartCount = game.debug.restartCount + 1;
+    const uiState = {
+      tutorialSeen: game.tutorialSeen,
+      storySeen: game.storySeen,
+      endingSeen: game.endingSeen,
+      inventoryOpen: game.inventoryOpen,
+      runMenuOpen: game.runMenuOpen,
+      screen: game.screen,
+      hasStarted: game.hasStarted
+    };
+    GameState.resetRun(game, keepSettlement);
+    game.settlement = settlement;
+    game.completedMissions = {};
+    game.debug.restartCount = restartCount;
+    game.tutorialSeen = uiState.tutorialSeen;
+    game.storySeen = uiState.storySeen;
+    game.endingSeen = uiState.endingSeen;
+    game.inventoryOpen = false;
+    game.runMenuOpen = false;
+    game.screen = uiState.screen;
+    game.hasStarted = uiState.hasStarted;
+    applySettlementBonuses();
+  }
+
+  function restartGame() {
+    resetRunState(true);
+    openRunScreen();
+    World.addLog(game, "新しい発掘を開始した。 ");
+    MapSystem.generate(game);
+    game.settlement.bestDepth = Math.max(game.settlement.bestDepth, game.depth);
+    World.addLog(game, `区画生成完了。部屋数 ${game.rooms.length}。敵 ${game.enemies.length} 体を検出。`);
+    if (FEATURES.floorEvents) World.addLog(game, `フロアイベント: ${FLOOR_EVENT_DEFS[game.floorEvent]?.name || "通常稼働"}。`);
+    render();
+  }
+
+  function init() {
+    const settings = loadSettings();
+    DIFFICULTY.current = settings.difficulty;
+    game.settlement = loadSettlement();
+    resetRunState(true);
+    game.settlement = loadSettlement();
+    game.tutorialSeen = settings.tutorialSeen;
+    game.storySeen = settings.storySeen;
+    game.endingSeen = settings.endingSeen;
+    game.screen = "title";
+    game.helpOpen = false;
+    game.tutorialOpen = false;
+    game.storyOpen = !settings.storySeen;
+    game.storyPage = 0;
+    game.npcDialog = null;
+    MapSystem.generate(game);
+    game.settlement.bestDepth = Math.max(game.settlement.bestDepth, game.depth);
+    World.recordCodex(game, "world:waste-zone", "再構成廃棄区域", "AIが作り、壊し、捨て続ける区域。人類はそこから文明の残骸を拾っている。 ");
+    World.recordCodex(game, "world:mission", "依頼", "発掘家は集落の依頼を受けて廃棄区域へ潜る。達成時は発掘記録に残る。 ");
+    World.recordCodex(game, "world:settlement", "集落", "水守り、老発掘家、修理屋、見張り、記録係がいる。拠点で1〜5を押すと会話できる。 ");
+    World.addLog(game, "タイトル画面。Enterで探索開始、Bで拠点、Sでストーリー、Eでエンディング、Hでヘルプ。 ");
+    World.addLog(game, `区画生成完了。部屋数 ${game.rooms.length}。敵 ${game.enemies.length} 体を検出。`);
+    if (FEATURES.floorEvents) World.addLog(game, `フロアイベント: ${FLOOR_EVENT_DEFS[game.floorEvent]?.name || "通常稼働"}。`);
+    render();
+  }
+
+  function startExploration() {
+    if (game.helpOpen) {
+      game.helpOpen = false;
+      return render();
+    }
+    if (game.storyOpen) {
+      advanceStory();
+      return;
+    }
+    if (game.endingOpen) {
+      advanceEnding();
+      return;
+    }
+    if (game.npcDialog) {
+      game.npcDialog = null;
+      return render();
+    }
+    if (game.runMenuOpen) {
+      game.runMenuOpen = false;
+      return render();
+    }
+    if (game.inventoryOpen) {
+      game.inventoryOpen = false;
+      return render();
+    }
+    if (game.tutorialOpen) {
+      game.tutorialOpen = false;
+      game.tutorialSeen = true;
+      persistUiSettings();
+      return render();
+    }
+    if (game.screen !== "run") {
+      openRunScreen();
+      World.addLog(game, "探索を開始した。 ");
+      return render();
+    }
+    render();
+  }
+
+  function openBaseScreen() {
+    if (game.helpOpen) game.helpOpen = false;
+    if (game.storyOpen) game.storyOpen = false;
+    if (game.endingOpen) game.endingOpen = false;
+    if (game.runRecordOpen) game.runRecordOpen = false;
+    if (game.runMenuOpen) game.runMenuOpen = false;
+    if (game.inventoryOpen) game.inventoryOpen = false;
+    if (game.npcDialog) game.npcDialog = null;
+    game.screen = game.screen === "base" ? (game.hasStarted ? "run" : "title") : "base";
+    render();
+  }
+
+  function toggleHelp() {
+    game.helpOpen = !game.helpOpen;
+    if (game.helpOpen) {
+      game.tutorialOpen = false;
+      game.storyOpen = false;
+      game.endingOpen = false;
+      game.runRecordOpen = false;
+      game.runMenuOpen = false;
+      game.inventoryOpen = false;
+      game.npcDialog = null;
+    }
+    render();
+  }
+
+  function closeOverlay() {
+    if (game.helpOpen) {
+      game.helpOpen = false;
+    } else if (game.storyOpen) {
+      game.storyOpen = false;
+      game.storySeen = true;
+      persistUiSettings();
+    } else if (game.endingOpen) {
+      game.endingOpen = false;
+      game.endingSeen = true;
+      persistUiSettings();
+    } else if (game.runRecordOpen) {
+      game.runRecordOpen = false;
+    } else if (game.runMenuOpen) {
+      game.runMenuOpen = false;
+    } else if (game.inventoryOpen) {
+      game.inventoryOpen = false;
+    } else if (game.npcDialog) {
+      game.npcDialog = null;
+    } else if (game.tutorialOpen) {
+      game.tutorialOpen = false;
+      game.tutorialSeen = true;
+      persistUiSettings();
+    } else if (game.screen === "base") {
+      game.screen = game.hasStarted ? "run" : "title";
+    }
+    render();
+  }
+
+  function openStoryFromMenu() {
+    if (game.screen === "run" && !game.helpOpen && !game.tutorialOpen && !game.storyOpen && !game.endingOpen && !game.npcDialog) return false;
+    game.helpOpen = false;
+    game.tutorialOpen = false;
+    game.npcDialog = null;
+    game.runRecordOpen = false;
+    game.runMenuOpen = false;
+    game.inventoryOpen = false;
+    game.endingOpen = false;
+    game.runRecordOpen = false;
+    game.storyOpen = true;
+    game.storyPage = 0;
+    render();
+    return true;
+  }
+
+  function advanceStory() {
+    if (!game.storyOpen) return false;
+    if (game.storyPage < STORY_PAGES.length - 1) {
+      game.storyPage++;
+      render();
+      return true;
+    }
+    game.storyOpen = false;
+    game.storySeen = true;
+    persistUiSettings();
+    render();
+    return true;
+  }
+
+  function openEndingFromMenu() {
+    if (game.screen === "run" && !game.helpOpen && !game.tutorialOpen && !game.storyOpen && !game.endingOpen && !game.npcDialog) return false;
+    if ((game.settlement?.cores || 0) <= 0 && !game.isClear) {
+      World.addLog(game, "エンディングは浄水コア回収後に読める。 ");
+      render();
+      return true;
+    }
+    game.helpOpen = false;
+    game.tutorialOpen = false;
+    game.storyOpen = false;
+    game.npcDialog = null;
+    game.runRecordOpen = false;
+    game.runMenuOpen = false;
+    game.inventoryOpen = false;
+    game.endingOpen = true;
+    game.endingPage = 0;
+    render();
+    return true;
+  }
+
+  function advanceEnding() {
+    if (!game.endingOpen) return false;
+    if (game.endingPage < ENDING_PAGES.length - 1) {
+      game.endingPage++;
+      render();
+      return true;
+    }
+    game.endingOpen = false;
+    game.endingSeen = true;
+    persistUiSettings();
+    render();
+    return true;
+  }
+
+  function talkToNpcFromBase(index) {
+    if (game.screen !== "base" || game.helpOpen || game.tutorialOpen || game.storyOpen) return false;
+    const keys = ["water_keeper", "old_digger", "mechanic", "lookout", "recorder"];
+    const key = keys[index];
+    if (!key) return false;
+    game.npcDialog = key;
+    World.recordCodex(game, `npc:${key}`, NPC_DEFS[key].name, NPC_DEFS[key].role);
+    render();
+    return true;
+  }
+
+  function openRunRecords() {
+    if (game.screen === "run" && !game.helpOpen && !game.tutorialOpen && !game.storyOpen && !game.endingOpen && !game.npcDialog && !game.runRecordOpen) return false;
+    game.helpOpen = false;
+    game.tutorialOpen = false;
+    game.storyOpen = false;
+    game.endingOpen = false;
+    game.npcDialog = null;
+    game.runMenuOpen = false;
+    game.inventoryOpen = false;
+    game.runRecordOpen = true;
+    render();
+    return true;
+  }
+
+  function toggleInventory() {
+    if (game.screen !== "run") {
+      World.addLog(game, "所持品一覧は探索中に確認できる。 ");
+      return render();
+    }
+    game.inventoryOpen = !game.inventoryOpen;
+    if (game.inventoryOpen) {
+      game.runMenuOpen = false;
+      game.helpOpen = false;
+      game.debug.inventoryOpenCount++;
+    }
+    render();
+    return true;
+  }
+
+  function toggleRunMenu() {
+    if (game.screen !== "run" && !game.runMenuOpen) return false;
+    game.runMenuOpen = !game.runMenuOpen;
+    if (game.runMenuOpen) {
+      game.inventoryOpen = false;
+      game.helpOpen = false;
+      game.tutorialOpen = false;
+      game.storyOpen = false;
+      game.endingOpen = false;
+      game.runRecordOpen = false;
+      game.npcDialog = null;
+      game.debug.menuOpenCount++;
+    }
+    render();
+    return true;
+  }
+
+  function menuButton() {
+    // 探索中はメニュー開閉、タイトル/拠点では識別設定切替
+    if (game.screen === "run") return toggleRunMenu();
+    return cycleDifficulty();
+  }
+
+  function selectInventoryIndex(index) {
+    if (game.screen !== "run") return false;
+    if (!game.inventory.length) {
+      World.addLog(game, "選択できる所持品がない。 ");
+      render();
+      return true;
+    }
+    if (index < 0 || index >= game.inventory.length) {
+      World.addLog(game, "その番号の所持品はない。 ");
+      render();
+      return true;
+    }
+    game.selectedIndex = index;
+    World.addLog(game, `選択: ${index + 1}. ${ItemSystem.getItemName(game, game.inventory[index])}`);
+    render();
+    return true;
+  }
+
+  function useSelectedInventoryItem() {
+    if (game.screen !== "run") {
+      upgradeBase();
+      return true;
+    }
+    return useInventoryItem(game.selectedIndex);
+  }
+
+  function resetProgress() {
+    clearSaveData();
+    DIFFICULTY.current = "clear";
+    resetRunState(false);
+    game.screen = "title";
+    game.tutorialSeen = false;
+    game.storySeen = false;
+    game.tutorialOpen = false;
+    game.storyOpen = true;
+    game.storyPage = 0;
+    game.endingOpen = false;
+    game.endingPage = 0;
+    game.runRecordOpen = false;
+    game.runMenuOpen = false;
+    game.inventoryOpen = false;
+    game.npcDialog = null;
+    game.runRecordOpen = false;
+    game.helpOpen = false;
+    MapSystem.generate(game);
+    World.addLog(game, "保存データを初期化した。 ");
+    render();
+  }
+
+  return {
+    init,
+    startExploration,
+    openBaseScreen,
+    toggleHelp,
+    closeOverlay,
+    openStoryFromMenu,
+    advanceStory,
+    openEndingFromMenu,
+    advanceEnding,
+    talkToNpcFromBase,
+    resetProgress,
+    movePlayer,
+    pickupItemAtPlayer,
+    contextPickupOrUse,
+    useInventoryItem,
+    upgradeBase,
+    cycleDifficulty,
+    regenerateArea,
+    restartGame,
+    selectInventory,
+    dropSelectedItem,
+    throwSelectedItem,
+    searchAround,
+    manualReturn,
+    openRunRecords,
+    toggleInventory,
+    toggleRunMenu,
+    menuButton,
+    selectInventoryIndex,
+    useSelectedInventoryItem,
+    __debugGame: game
+  };
+}
+
+
+// --- main.js ---
+const canvas = document.getElementById("gameCanvas");
+const miniMapCanvas = document.getElementById("miniMapCanvas");
+
+if (!canvas) {
+  throw new Error("gameCanvas が見つかりません。");
+}
+
+const app = createGameApp({
+  canvas,
+  ctx: canvas.getContext("2d"),
+  miniMapCanvas,
+  miniCtx: miniMapCanvas ? miniMapCanvas.getContext("2d") : null,
+  statusText: document.getElementById("statusText"),
+  logPanel: document.getElementById("logPanel"),
+  debugText: document.getElementById("debugText"),
+  screenPanel: document.getElementById("screenPanel"),
+  inventoryPanel: document.getElementById("inventoryPanel"),
+  basePanel: document.getElementById("basePanel"),
+  codexPanel: document.getElementById("codexPanel"),
+  versionText: document.getElementById("versionText")
+});
+
+window.__haikisoApp = app;
+app.init();
+bindInput(app);
+bindTouch(app);

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>廃棄層の発掘家 v12.0.0</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="game">
+    <section class="panel">
+      <h1>廃棄層の発掘家 <span id="versionText" class="ver">Version: v12.0.0</span></h1>
+      <div class="bars">
+        <div class="bar"><span class="bar-label">HP</span><span class="bar-track"><span id="hpFill" class="bar-fill"></span></span><span id="hpText" class="bar-val">-</span></div>
+        <div class="bar"><span class="bar-label">空腹</span><span class="bar-track"><span id="hungerFill" class="bar-fill"></span></span><span id="hungerText" class="bar-val">-</span></div>
+        <div class="bar"><span class="bar-label">汚染</span><span class="bar-track"><span id="pollutionFill" class="bar-fill"></span></span><span id="pollutionText" class="bar-val">-</span></div>
+      </div>
+      <p id="statusText" class="status">深度 1 / HP 10/10</p>
+      <p id="debugText" class="debug">debug: -</p>
+    </section>
+
+    <section class="screen-panel" id="screenPanel" hidden></section>
+
+    <section class="play-area">
+      <canvas id="gameCanvas" width="672" height="480"></canvas>
+      <aside class="side">
+        <h2>ミニマップ</h2>
+        <canvas id="miniMapCanvas" width="240" height="160"></canvas>
+        <p class="note">未踏破は黒。踏破済みのみ表示。</p>
+      </aside>
+    </section>
+
+    <section class="controls" id="controls">
+      <div class="dpad">
+        <button type="button" class="dbtn" data-cmd="move" data-arg="-1,-1" aria-label="左上">↖</button>
+        <button type="button" class="dbtn" data-cmd="move" data-arg="0,-1" aria-label="上">↑</button>
+        <button type="button" class="dbtn" data-cmd="move" data-arg="1,-1" aria-label="右上">↗</button>
+        <button type="button" class="dbtn" data-cmd="move" data-arg="-1,0" aria-label="左">←</button>
+        <button type="button" class="dbtn wait" data-cmd="move" data-arg="0,0" aria-label="足踏み">・</button>
+        <button type="button" class="dbtn" data-cmd="move" data-arg="1,0" aria-label="右">→</button>
+        <button type="button" class="dbtn" data-cmd="move" data-arg="-1,1" aria-label="左下">↙</button>
+        <button type="button" class="dbtn" data-cmd="move" data-arg="0,1" aria-label="下">↓</button>
+        <button type="button" class="dbtn" data-cmd="move" data-arg="1,1" aria-label="右下">↘</button>
+      </div>
+      <div class="action-bar">
+        <button type="button" class="abtn" data-cmd="pickup"><span id="actionPickupLabel">拾う</span></button>
+        <button type="button" class="abtn" data-cmd="inventory">所持品</button>
+        <button type="button" class="abtn" data-cmd="throw">投げる</button>
+        <button type="button" class="abtn" data-cmd="menu">メニュー</button>
+      </div>
+    </section>
+
+    <section class="hud">
+      <section class="box" id="inventoryPanel"><h2>所持品</h2><p>なし</p></section>
+      <section class="box" id="basePanel"><h2>拠点</h2><p>未集計</p></section>
+      <section class="box" id="codexPanel"><h2>記録</h2><p>未記録</p></section>
+      <section class="box log" id="logPanel"><p>発掘家は再構成された廃棄区域に足を踏み入れた。</p></section>
+    </section>
+
+    <p class="hint">PC: 矢印/WASD移動、QEZC/テンキーで斜め、.足踏み、G拾う、I所持品、1〜8選択、U使用、X置く、T投げる、F調べる、Mメニュー、B拠点、P帰還、L記録、N新規、Enter/Escで送り/閉じる。スマホ: 方向パッドと下段ボタンで操作。</p>
+  </main>
+
+  <script src="src/core.js"></script>
+  <script src="src/systems.js"></script>
+  <script src="src/ui.js"></script>
+  <script src="src/game.js"></script>
+</body>
+</html>
