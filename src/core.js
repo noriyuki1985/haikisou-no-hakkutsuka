@@ -1,6 +1,6 @@
 // --- config.js ---
-const VERSION = "v12.0.0";
-const FEATURE_LEVEL = 1200;
+const VERSION = "v14.0.0";
+const FEATURE_LEVEL = 1400;
 
 const FEATURES = {
   items: true,
@@ -45,7 +45,10 @@ const FEATURES = {
   animationReady: true,
   pseudo25dArt: true,
   vectorSpriteFallback: true,
-  cinematicUiV12: true
+  cinematicUiV12: true,
+  imageSprites: true,
+  spriteAnimation: true,
+  animatedHudV14: true
 };
 
 const TILE = {
@@ -66,8 +69,11 @@ const CONFIG = {
   viewportWidthMobile: 11,
   viewportHeightMobile: 13,
   mobileBreakpoint: 760,
-  moveAnimMs: 110,
-  fxMs: 240,
+  moveAnimMs: 135,
+  fxMs: 320,
+  idleAnimMs: 1800,
+  enemyAnimMs: 1500,
+  spriteAnimStrength: 1.0,
   maxDevicePixelRatio: 2,
   sightRadius: 7,
   corridorSightRadius: 2,

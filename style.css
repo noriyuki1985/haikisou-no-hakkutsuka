@@ -1,29 +1,61 @@
-* {
-  box-sizing: border-box;
+* { box-sizing: border-box; }
+
+:root {
+  --bg0: #07090d;
+  --panel: rgba(18, 22, 28, 0.9);
+  --line: rgba(119, 200, 255, 0.22);
+  --text: #e7edf2;
+  --muted: #8d9aa6;
+  --warn: #e6bc55;
 }
 
 html, body {
   margin: 0;
-  background: #111;
-  color: #e6e6e6;
+  min-height: 100%;
+  background:
+    radial-gradient(circle at 18% 8%, rgba(68, 134, 174, 0.16), transparent 30%),
+    radial-gradient(circle at 82% 12%, rgba(65, 221, 142, 0.07), transparent 26%),
+    linear-gradient(160deg, var(--bg0), #090c10 42%, #050608 100%);
+  color: var(--text);
   font-family: system-ui, sans-serif;
   -webkit-text-size-adjust: 100%;
 }
 
 .game {
   width: 100%;
-  max-width: 980px;
+  max-width: 1120px;
   margin: 0 auto;
   padding: 14px 12px calc(18px + env(safe-area-inset-bottom));
 }
 
+.panel,
+.side,
+.box,
+.screen-panel {
+  background: linear-gradient(145deg, rgba(26, 33, 42, 0.94), rgba(11, 13, 17, 0.94));
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.04);
+  backdrop-filter: blur(6px);
+}
+
 .panel {
+  padding: 12px 14px;
   margin-bottom: 10px;
 }
 
 .panel h1 {
   margin: 0 0 6px;
   font-size: 22px;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 18px rgba(126, 202, 255, 0.18);
+}
+
+.panel h1::before {
+  content: "◈";
+  color: #73d5ff;
+  margin-right: 8px;
+  text-shadow: 0 0 14px rgba(115, 213, 255, 0.8);
 }
 
 .panel h1 .ver {
@@ -35,23 +67,22 @@ html, body {
 
 .panel .status {
   margin: 4px 0;
-  color: #aaa;
+  color: var(--muted);
   font-size: 13px;
   line-height: 1.5;
 }
 
 .panel .debug {
-  color: #666;
+  color: #66727d;
   font-family: monospace;
   font-size: 11px;
   word-break: break-all;
 }
 
-/* ---- HUD バー ---- */
 .bars {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  gap: 8px;
+  gap: 12px;
   margin: 6px 0;
 }
 
@@ -64,17 +95,18 @@ html, body {
 
 .bar-label {
   width: 32px;
-  color: #bbb;
+  color: #b6c0ca;
   flex: 0 0 auto;
 }
 
 .bar-track {
   flex: 1 1 auto;
   height: 12px;
-  background: #2a2a2a;
-  border: 1px solid #3a3a3a;
+  background: linear-gradient(90deg, #14181d, #0b0d10);
+  border: 1px solid rgba(130, 180, 210, 0.22);
   border-radius: 6px;
   overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.65);
 }
 
 .bar-fill {
@@ -83,17 +115,17 @@ html, body {
   width: 0%;
   background: #5fd06a;
   transition: width 140ms ease;
+  box-shadow: 0 0 12px rgba(120, 220, 160, 0.35);
 }
 
 .bar-val {
   width: 56px;
   text-align: right;
-  color: #999;
+  color: #9aa7b2;
   font-variant-numeric: tabular-nums;
   flex: 0 0 auto;
 }
 
-/* ---- プレイエリア ---- */
 .play-area {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 260px;
@@ -101,43 +133,48 @@ html, body {
   align-items: start;
 }
 
-#gameCanvas {
+#gameCanvas,
+#miniMapCanvas {
   display: block;
+  background: #000;
+  border: 2px solid rgba(112, 183, 225, 0.45);
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.03), 0 16px 44px rgba(0,0,0,0.52), 0 0 28px rgba(74, 169, 219, 0.1);
+  border-radius: 12px;
+  image-rendering: pixelated;
+}
+
+#gameCanvas {
   width: 100%;
   height: auto;
-  background: #000;
-  border: 2px solid #444;
-  image-rendering: pixelated;
-  touch-action: none; /* マップのタップ操作は無効（誤操作防止） */
+  touch-action: none;
 }
 
 .side {
   padding: 12px;
-  background: #181818;
-  border: 1px solid #333;
 }
 
-.side h2 {
+.side h2,
+.box h2,
+.screen-panel h2 {
   margin: 0 0 8px;
   font-size: 15px;
+  color: #dff5ff;
+  text-shadow: 0 0 12px rgba(117, 208, 255, 0.2);
 }
 
 #miniMapCanvas {
-  display: block;
   width: 100%;
   max-width: 240px;
   height: auto;
-  background: #000;
-  border: 2px solid #444;
-  image-rendering: pixelated;
 }
 
-.note {
-  color: #888;
+.note,
+.hint {
+  color: var(--muted);
   font-size: 12px;
+  line-height: 1.7;
 }
 
-/* ---- 操作盤 ---- */
 .controls {
   display: flex;
   flex-wrap: wrap;
@@ -149,9 +186,7 @@ html, body {
   -webkit-user-select: none;
 }
 
-.controls.controls-dim {
-  opacity: 0.45;
-}
+.controls.controls-dim { opacity: 0.45; }
 
 .dpad {
   display: grid;
@@ -160,28 +195,35 @@ html, body {
   gap: 6px;
 }
 
-.dbtn, .abtn, .panel-btn {
+.dbtn,
+.abtn,
+.panel-btn {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   cursor: pointer;
   font-family: inherit;
+  color: #eee;
+  background: linear-gradient(145deg, #202b3a, #10151e);
+  border: 1px solid rgba(117, 176, 218, 0.35);
+  border-radius: 10px;
+  box-shadow: 0 6px 14px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05);
 }
 
 .dbtn {
   font-size: 22px;
-  color: #e6e6e6;
-  background: #242424;
-  border: 1px solid #3d3d3d;
-  border-radius: 10px;
 }
 
-.dbtn:active {
-  background: #3a3a3a;
+.dbtn:active,
+.abtn:active,
+.panel-btn:active {
+  transform: translateY(1px);
+  background: linear-gradient(145deg, #2b3a4e, #151d29);
 }
 
 .dbtn.wait {
-  color: #9bd29b;
-  background: #1d241d;
+  color: #adffbd;
+  background: linear-gradient(145deg, #183021, #0c1710);
+  border-color: rgba(141, 255, 166, 0.3);
 }
 
 .action-bar {
@@ -192,21 +234,13 @@ html, body {
   align-content: end;
 }
 
-.abtn {
+.abtn,
+.panel-btn {
   min-height: 44px;
   padding: 8px 14px;
   font-size: 15px;
-  color: #eee;
-  background: #283042;
-  border: 1px solid #3c4a66;
-  border-radius: 10px;
 }
 
-.abtn:active {
-  background: #36425c;
-}
-
-/* ---- HUD パネル ---- */
 .hud {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
@@ -219,15 +253,7 @@ html, body {
   max-height: 190px;
   overflow: auto;
   padding: 12px;
-  background: #1b1b1b;
-  border: 1px solid #333;
-  color: #ccc;
-}
-
-.box h2 {
-  margin: 0 0 8px;
-  font-size: 15px;
-  color: #e0e0e0;
+  color: #ccd5de;
 }
 
 .box p {
@@ -241,28 +267,17 @@ html, body {
   min-height: 110px;
 }
 
-.hint {
-  color: #777;
-  font-size: 12px;
-  line-height: 1.7;
-  margin-top: 12px;
-}
+.log p:first-child { color: #f3d483; }
 
-/* ---- オーバーレイ ---- */
 .screen-panel {
   margin: 12px 0;
   padding: 14px;
-  background: #171717;
-  border: 1px solid #555;
   color: #ddd;
 }
 
-.screen-panel[hidden] {
-  display: none;
-}
+.screen-panel[hidden] { display: none; }
 
 .screen-panel h2 {
-  margin: 0 0 8px;
   font-size: 18px;
 }
 
@@ -272,37 +287,15 @@ html, body {
   font-size: 14px;
 }
 
-.screen-panel .menu-line {
-  color: #f0d27a;
-}
-
-.screen-panel .danger-line {
-  color: #ff9f9f;
-}
-
-.screen-panel .muted-line {
-  color: #999;
-}
+.screen-panel .menu-line { color: #f2d57c; }
+.screen-panel .danger-line { color: #ff8b7a; text-shadow: 0 0 12px rgba(255, 80, 50, 0.25); }
+.screen-panel .muted-line { color: #999; }
 
 .btn-row {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin: 10px 0 4px;
-}
-
-.panel-btn {
-  min-height: 44px;
-  padding: 8px 16px;
-  font-size: 15px;
-  color: #eee;
-  background: #2a3344;
-  border: 1px solid #3c4a66;
-  border-radius: 8px;
-}
-
-.panel-btn:active {
-  background: #36425c;
 }
 
 .panel-btn.danger {
@@ -323,6 +316,7 @@ html, body {
   background: #2e3a52;
   border-color: #5a6f9c;
   color: #fff;
+  box-shadow: inset 3px 0 0 #77c8ff, 0 0 18px rgba(119, 200, 255, 0.18);
 }
 
 kbd {
@@ -335,23 +329,13 @@ kbd {
   font-family: monospace;
 }
 
-/* ---- モバイル ---- */
 @media (max-width: 760px) {
-  .game {
-    padding: 10px 8px calc(14px + env(safe-area-inset-bottom));
-  }
-  .panel h1 {
-    font-size: 19px;
-  }
-  .panel .debug {
-    display: none;
-  }
-  .hint {
-    display: none;
-  }
-  .play-area {
-    grid-template-columns: 1fr;
-  }
+  .game { padding: 10px 8px calc(14px + env(safe-area-inset-bottom)); }
+  .panel { padding: 10px 11px; }
+  .panel h1 { font-size: 19px; }
+  .panel .debug, .hint { display: none; }
+  .bars { grid-template-columns: 1fr; gap: 6px; }
+  .play-area { grid-template-columns: 1fr; }
   .side {
     order: 2;
     display: flex;
@@ -359,85 +343,25 @@ kbd {
     gap: 10px;
     padding: 8px;
   }
-  .side h2 {
-    margin: 0;
-    font-size: 13px;
-  }
-  #miniMapCanvas {
-    max-width: 160px;
-  }
+  .side h2 { margin: 0; font-size: 13px; }
+  #miniMapCanvas { max-width: 160px; }
   .controls {
     justify-content: space-between;
     gap: 10px;
     position: sticky;
     bottom: 0;
-    background: rgba(17, 17, 17, 0.92);
+    background: rgba(10, 12, 16, 0.94);
+    border-top: 1px solid rgba(119, 200, 255, 0.18);
+    box-shadow: 0 -12px 28px rgba(0,0,0,0.38);
     padding: 8px 4px calc(6px + env(safe-area-inset-bottom));
     z-index: 5;
   }
   .dpad {
-    grid-template-columns: repeat(3, 60px);
-    grid-template-rows: repeat(3, 60px);
+    grid-template-columns: repeat(3, 58px);
+    grid-template-rows: repeat(3, 58px);
   }
-  .action-bar {
-    min-width: 0;
-    flex: 1 1 auto;
-  }
-  .hud {
-    grid-template-columns: 1fr;
-  }
-  .log {
-    grid-column: span 1;
-  }
-  .box {
-    max-height: 150px;
-  }
-}
-
-
-/* ---- v12.0.0 2.5D visual polish ---- */
-body {
-  background:
-    radial-gradient(circle at 50% 0%, rgba(48, 70, 82, 0.22), transparent 42%),
-    linear-gradient(180deg, #101316 0%, #090a0b 64%, #050505 100%);
-}
-.game {
-  filter: drop-shadow(0 18px 40px rgba(0,0,0,0.38));
-}
-.panel, .side, .box, .screen-panel {
-  background: linear-gradient(180deg, rgba(31,35,39,0.96), rgba(18,20,23,0.96));
-  border-color: rgba(110, 137, 154, 0.35);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 12px 32px rgba(0,0,0,0.24);
-}
-.panel h1 {
-  letter-spacing: 0.03em;
-  text-shadow: 0 0 16px rgba(120, 190, 255, 0.16);
-}
-#gameCanvas, #miniMapCanvas {
-  border-color: rgba(130, 169, 190, 0.55);
-  box-shadow: 0 0 0 1px rgba(255,255,255,0.04), 0 24px 48px rgba(0,0,0,0.44), 0 0 32px rgba(80,150,180,0.10);
-  border-radius: 10px;
-}
-.bar-track {
-  background: #101316;
-  border-color: rgba(120, 150, 170, 0.38);
-  box-shadow: inset 0 2px 8px rgba(0,0,0,0.45);
-}
-.bar-fill {
-  box-shadow: 0 0 12px currentColor;
-}
-.dbtn, .abtn, .panel-btn {
-  background: linear-gradient(180deg, #303947, #171d25);
-  border-color: rgba(125, 158, 185, 0.52);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 6px 14px rgba(0,0,0,0.26);
-}
-.dbtn:active, .abtn:active, .panel-btn:active {
-  transform: translateY(1px);
-  background: linear-gradient(180deg, #3e4a5d, #202837);
-}
-.screen-panel .menu-line {
-  color: #9fd7ff;
-}
-.screen-panel .danger-line {
-  color: #ff8f8f;
+  .action-bar { min-width: 0; flex: 1 1 auto; }
+  .hud { grid-template-columns: 1fr; }
+  .log { grid-column: span 1; }
+  .box { max-height: 150px; }
 }
