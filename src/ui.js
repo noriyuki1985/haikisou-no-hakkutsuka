@@ -103,13 +103,16 @@ const Visuals = (() => {
 
   function assetStatus() {
     const done = ASSET_STATE.loaded + ASSET_STATE.failed;
+    const elapsed = Date.now() - ASSET_STATE.startedAt;
+    const timedOut = elapsed > 4000;
     return {
       total: ASSET_STATE.total,
       loaded: ASSET_STATE.loaded,
       failed: ASSET_STATE.failed,
       done,
-      ready: done >= ASSET_STATE.total,
-      ratio: ASSET_STATE.total ? done / ASSET_STATE.total : 1,
+      ready: done >= ASSET_STATE.total || timedOut,
+      timedOut,
+      ratio: ASSET_STATE.total ? Math.min(1, done / ASSET_STATE.total) : 1,
       failedKeys: [...ASSET_STATE.failedKeys]
     };
   }
@@ -766,6 +769,7 @@ function createRenderer(elements) {
   let loopRunning = false;
   let lastGame = null;
   let itemSeq = 0;
+  let assetLoadingOverlayShown = false;
 
   function nowMs() {
     return typeof performance !== "undefined" ? performance.now() : Date.now();
@@ -1029,7 +1033,13 @@ function createRenderer(elements) {
   function loop() {
     drawWorld();
     const asset = Visuals.assetStatus ? Visuals.assetStatus() : { ready: true };
-    if (lastGame && !asset.ready) renderScreenPanel(lastGame);
+    if (lastGame && !asset.ready) {
+      assetLoadingOverlayShown = true;
+      renderScreenPanel(lastGame);
+    } else if (lastGame && assetLoadingOverlayShown) {
+      assetLoadingOverlayShown = false;
+      render(lastGame);
+    }
     if (typeof requestAnimationFrame === "function") requestAnimationFrame(loop);
     else loopRunning = false;
   }
@@ -1218,7 +1228,7 @@ function createRenderer(elements) {
       screenPanel.classList.add("loading-screen");
       h.textContent = "旧文明データを読込中";
       appendPanelLine(`画像アセット ${asset.done}/${asset.total} 読み込み中。`, "menu-line");
-      appendPanelLine("読み込み中でも、失敗した画像はCanvas描画へ自動フォールバックする。", "muted-line");
+      appendPanelLine("読み込みが長引く場合も約4秒後に自動で開始し、未読込画像はCanvas描画へフォールバックする。", "muted-line");
       const bar = document.createElement("div");
       bar.className = "asset-load-bar";
       const fill = document.createElement("span");

@@ -458,7 +458,7 @@ kbd {
   transition: width 140ms ease;
 }
 
-/* ---- v16.4.0 UI refactor: compact, non-overlapping mobile-first layout ---- */
+/* ---- v16.4.2 UI refactor: compact, non-overlapping mobile-first layout ---- */
 .screen-panel.story-screen,
 .screen-panel.npc-screen,
 .screen-panel.result-screen,
@@ -699,7 +699,7 @@ kbd {
   #gameCanvas { max-height: calc(100dvh - 224px); }
 }
 
-/* ---- v16.1.0 - v16.4.0 UI completion ---- */
+/* ---- v16.1.0 - v16.4.2 UI completion ---- */
 .status {
   font-weight: 700;
   color: #dff7ff !important;

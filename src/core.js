@@ -1,5 +1,5 @@
 // --- config.js ---
-const VERSION = "v16.4.0";
+const VERSION = "v16.4.2";
 const FEATURE_LEVEL = 1600;
 
 const FEATURES = {
