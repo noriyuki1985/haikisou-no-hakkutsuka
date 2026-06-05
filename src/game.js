@@ -1,4 +1,8 @@
 // --- game.js ---
+function playSound(name) {
+  if (typeof AudioSystem !== "undefined") AudioSystem.play(name);
+}
+
 function createGameApp(elements) {
   const renderer = createRenderer(elements);
   const game = GameState.createInitialGame();
@@ -129,6 +133,7 @@ function createGameApp(elements) {
     game.isGameOver = true;
     game.lastDeathCause = String(message || "回収不能").replace(/Nキー.*$/, "").trim();
     World.addLog(game, message);
+    playSound("hurt");
     settleRunResult("death");
   }
 
@@ -137,6 +142,7 @@ function createGameApp(elements) {
     game.isReturned = true;
     game.lastDeathCause = "任意帰還";
     World.addLog(game, message);
+    playSound("return");
     settleRunResult("return");
     game.screen = "base";
     VisibilitySystem.update(game);
@@ -169,6 +175,7 @@ function createGameApp(elements) {
     game.debug.clearCount++;
     World.recordCodex(game, "goal:core", "浄水コア", "集落の浄水装置を延命できる中核部品。発掘家が命を賭ける理由。 ");
     World.addLog(game, "浄水コアを回収した。集落へ帰還する。 ");
+    playSound("clear");
     settleRunResult("clear");
     game.endingOpen = true;
     game.endingPage = 0;
@@ -185,10 +192,12 @@ function createGameApp(elements) {
     game.disabledTerminals = (game.disabledTerminals || 0) + 1;
     game.debug.terminalUseCount++;
     game.map[terminal.y][terminal.x] = TILE.FLOOR;
+    World.pushFx(game, "terminal", terminal.x, terminal.y);
     for (const enemy of game.enemies) {
       if (enemy.type === "guardian") enemy.stun = Math.max(enemy.stun || 0, 2);
     }
     World.addLog(game, `中枢防衛端末を停止した。残り ${game.terminals.filter(t => t.active).length}。`);
+    playSound("terminal");
     World.recordCodex(game, "boss:terminal", "中枢防衛端末", "防衛機と浄水コアを守る旧文明端末。全停止でコアを取り外せる。 ");
     return true;
   }
@@ -198,6 +207,7 @@ function createGameApp(elements) {
     game.settlement.bestDepth = Math.max(game.settlement.bestDepth, game.depth);
     MapSystem.generate(game);
     World.addLog(game, game.depth >= CONFIG.maxDepth ? "搬送リフトが最深層で停止した。浄水コアを探せ。" : `搬送リフトが稼働した。深度 ${game.depth} へ移動した。`);
+    playSound("terminal");
     if (FEATURES.floorEvents) World.addLog(game, `フロアイベント: ${FLOOR_EVENT_DEFS[game.floorEvent]?.name || "通常稼働"}。`);
     if (FEATURES.bossTerminals && game.depth >= CONFIG.maxDepth) World.addLog(game, "中枢防衛端末をすべて停止し、防衛機を沈黙させてからコアを回収する。 ");
     game.turn++;
@@ -260,6 +270,7 @@ function createGameApp(elements) {
     }
     game.player.x = nextX;
     game.player.y = nextY;
+    playSound("move");
     MapSystem.handleRoomEntry(game);
     TrapSystem.trigger(game, triggerGameOver);
     if (game.isGameOver || game.isClear) {
@@ -279,7 +290,7 @@ function createGameApp(elements) {
   function pickupItemAtPlayer() {
     if (!runInputAllowed()) return;
     if (game.isGameOver || game.isClear) return endMessage();
-    if (ItemSystem.pickupAtPlayer(game)) commitPlayerTurn({ reason: "pickup" });
+    if (ItemSystem.pickupAtPlayer(game)) { playSound("pickup"); commitPlayerTurn({ reason: "pickup" }); }
     else render();
   }
 
@@ -297,6 +308,7 @@ function createGameApp(elements) {
     if (!runInputAllowed()) return;
     if (game.isGameOver || game.isClear) return endMessage();
     if (ItemSystem.useInventoryItem(game, index)) {
+      playSound("use");
       if (game.pendingExtract) {
         game.pendingExtract = false;
         finishReturn("緊急帰還タグを使い、発掘を切り上げた。");
@@ -328,7 +340,7 @@ function createGameApp(elements) {
   function searchAround() {
     if (!runInputAllowed()) return;
     if (game.isGameOver || game.isClear) return endMessage();
-    if (TrapSystem.searchAround(game)) commitPlayerTurn({ reason: "search" });
+    if (TrapSystem.searchAround(game)) { playSound("ui"); commitPlayerTurn({ reason: "search" }); }
     else render();
   }
 
@@ -469,6 +481,7 @@ function createGameApp(elements) {
   }
 
   function toggleHelp() {
+    playSound("ui");
     game.helpOpen = !game.helpOpen;
     if (game.helpOpen) {
       game.tutorialOpen = false;
@@ -605,6 +618,7 @@ function createGameApp(elements) {
       World.addLog(game, "所持品一覧は探索中に確認できる。 ");
       return render();
     }
+    playSound("ui");
     game.inventoryOpen = !game.inventoryOpen;
     if (game.inventoryOpen) {
       game.runMenuOpen = false;
@@ -617,6 +631,7 @@ function createGameApp(elements) {
 
   function toggleRunMenu() {
     if (game.screen !== "run" && !game.runMenuOpen) return false;
+    playSound("ui");
     game.runMenuOpen = !game.runMenuOpen;
     if (game.runMenuOpen) {
       game.inventoryOpen = false;

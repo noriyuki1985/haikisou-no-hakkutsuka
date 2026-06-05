@@ -1,6 +1,6 @@
 // --- config.js ---
-const VERSION = "v14.0.0";
-const FEATURE_LEVEL = 1400;
+const VERSION = "v16.4.0";
+const FEATURE_LEVEL = 1600;
 
 const FEATURES = {
   items: true,
@@ -39,6 +39,11 @@ const FEATURES = {
   inventoryOverlay: true,
   improvedRecords: true,
   inputCleanupV10: true,
+  debugV1531: true,
+  floorEventVisuals: true,
+  audioSystem: true,
+  narrativePresentationV156: true,
+  uiRefactorV16: true,
   mobileUi: true,
   touchControls: true,
   renderLoop: true,
@@ -48,7 +53,11 @@ const FEATURES = {
   cinematicUiV12: true,
   imageSprites: true,
   spriteAnimation: true,
-  animatedHudV14: true
+  animatedHudV14: true,
+  assetManagerV15: true,
+  richTitleV15: true,
+  richBaseV15: true,
+  enhancedCombatFxV15: true
 };
 
 const TILE = {
@@ -67,10 +76,10 @@ const CONFIG = {
   viewportWidth: 21,
   viewportHeight: 15,
   viewportWidthMobile: 11,
-  viewportHeightMobile: 13,
+  viewportHeightMobile: 9,
   mobileBreakpoint: 760,
   moveAnimMs: 135,
-  fxMs: 320,
+  fxMs: 560,
   idleAnimMs: 1800,
   enemyAnimMs: 1500,
   spriteAnimStrength: 1.0,
@@ -123,6 +132,74 @@ const DIFFICULTY = {
 function currentDifficulty() {
   return DIFFICULTY.presets[DIFFICULTY.current] || DIFFICULTY.presets.clear;
 }
+
+
+const AudioSystem = (() => {
+  let ctx = null;
+  let muted = false;
+  let last = 0;
+
+  const PRESETS = {
+    ui: [520, 0.035, "sine"],
+    move: [190, 0.025, "triangle"],
+    pickup: [740, 0.045, "sine"],
+    use: [620, 0.05, "sine"],
+    hit: [310, 0.065, "square"],
+    hurt: [150, 0.065, "sawtooth"],
+    defeat: [90, 0.08, "triangle"],
+    shoot: [430, 0.06, "square"],
+    laser: [780, 0.06, "sawtooth"],
+    terminal: [880, 0.055, "sine"],
+    pollution: [120, 0.045, "sawtooth"],
+    trap: [260, 0.06, "square"],
+    clear: [980, 0.065, "sine"],
+    return: [420, 0.045, "triangle"],
+    warning: [210, 0.06, "square"]
+  };
+
+  function unlock() {
+    if (muted || ctx) return Boolean(ctx);
+    const AC = typeof window !== "undefined" ? (window.AudioContext || window.webkitAudioContext) : null;
+    if (!AC) return false;
+    try {
+      ctx = new AC();
+      if (ctx.state === "suspended" && ctx.resume) ctx.resume();
+      return true;
+    } catch (_) {
+      muted = true;
+      return false;
+    }
+  }
+
+  function play(name) {
+    if (!FEATURES.audioSystem || muted) return;
+    if (!unlock() || !ctx) return;
+    const now = ctx.currentTime;
+    if (Date.now() - last < 22 && name !== "laser") return;
+    last = Date.now();
+    const [freq, gainValue, type] = PRESETS[name] || PRESETS.ui;
+    try {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, now);
+      osc.frequency.exponentialRampToValueAtTime(Math.max(40, freq * 0.58), now + 0.12);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(gainValue, now + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.18);
+    } catch (_) {}
+  }
+
+  function setMuted(value) {
+    muted = Boolean(value);
+  }
+
+  return { unlock, play, setMuted };
+})();
 
 
 // --- data.js ---

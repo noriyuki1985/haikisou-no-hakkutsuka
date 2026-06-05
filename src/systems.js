@@ -1,3 +1,7 @@
+function systemSound(name) {
+  if (typeof AudioSystem !== "undefined") AudioSystem.play(name);
+}
+
 // --- items.js ---
 const ItemSystem = (() => {
   function getItemName(game, item) {
@@ -403,9 +407,11 @@ const TrapSystem = (() => {
     World.recordCodex(game, `trap:${trap.type}`, def.name, def.desc);
     if (trap.type === "shock") {
       game.player.hp = Math.max(0, game.player.hp - 3);
+      systemSound("trap");
       World.addLog(game, `漏電床が発火した。HP ${game.player.hp}/${game.player.maxHp}。`);
     } else if (trap.type === "pollution") {
       game.player.pollution = Math.min(CONFIG.pollutionLimit, game.player.pollution + 20);
+      systemSound("pollution");
       World.addLog(game, "汚染カプセルが割れた。汚染度が上昇した。 ");
     } else if (trap.type === "conveyor") {
       const tile = MapSystem.findFreeFloorTile(game, { minPlayerDistance: 7, avoidItems: false, avoidTraps: false });
@@ -513,6 +519,7 @@ const EnemySystem = (() => {
     enemy.hp -= damage;
     game.debug.playerAttackCount++;
     World.pushFx(game, "hit", enemy.x, enemy.y);
+    systemSound("hit");
     World.addLog(game, `${enemy.name}を攻撃。${damage}ダメージ。`);
     World.recordCodex(game, `enemy:${enemy.type}`, enemy.name, ENEMY_DEFS[enemy.type]?.desc || "自律機械。 ");
     if (enemy.hp <= 0) defeatEnemy(game, enemy);
@@ -522,6 +529,7 @@ const EnemySystem = (() => {
     game.enemies = game.enemies.filter(existing => existing !== enemy);
     game.debug.enemyDefeatCount++;
     World.pushFx(game, "defeat", enemy.x, enemy.y);
+    systemSound("defeat");
     World.addLog(game, `${enemy.name}は沈黙した。`);
     if (enemy.type === "guardian") game.bossDefeated = true;
     if (enemy.carriedItem && !World.getItemAt(game, enemy.x, enemy.y)) {
@@ -552,6 +560,7 @@ const EnemySystem = (() => {
     game.player.hp = Math.max(0, game.player.hp - damage);
     game.debug.enemyAttackCount++;
     World.pushFx(game, "hurt", game.player.x, game.player.y);
+    systemSound("hurt");
     World.addLog(game, `${enemy.name}が発掘家を攻撃。HP ${game.player.hp}/${game.player.maxHp}。`);
     applyContactAbility(game, enemy);
     if (game.player.hp <= 0 && onDeath) onDeath("発掘家は自律機械に倒された。Nキーで再開。");
@@ -708,6 +717,8 @@ const EnemySystem = (() => {
     const damage = Math.max(1, rawDamage - (armorDef?.defenseBonus || 0));
     game.player.hp = Math.max(0, game.player.hp - damage);
       game.debug.bossLaserCount += enemy.type === "guardian" ? 1 : 0;
+      World.pushFx(game, enemy.type === "guardian" ? "laser" : "shoot", game.player.x, game.player.y);
+      systemSound(enemy.type === "guardian" ? "laser" : "shoot");
       World.addLog(game, `${enemy.name}が射撃した。HP ${game.player.hp}/${game.player.maxHp}。`);
       if (game.player.hp <= 0 && onDeath) onDeath("発掘家は旧軍の射撃で倒れた。Nキーで再開。");
       return false;

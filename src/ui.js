@@ -13,6 +13,42 @@ const Visuals = (() => {
     guardian: "assets/characters/guardian.png"
   };
 
+
+
+  const TILE_SPRITE_PATHS = {
+    [TILE.FLOOR]: "assets/tiles/floor.png",
+    [TILE.WALL]: "assets/tiles/wall.png",
+    [TILE.LIFT]: "assets/tiles/lift.png",
+    [TILE.CORE]: "assets/tiles/core.png",
+    [TILE.TERMINAL]: "assets/tiles/terminal.png",
+    [TILE.POLLUTION]: "assets/tiles/pollution.png"
+  };
+
+  const ITEM_ICON_PATHS = {
+    food: "assets/items/nutrition_block.png",
+    medicine: "assets/items/medicine.png",
+    device: "assets/items/device.png",
+    tactical: "assets/items/tactical.png",
+    equipment: "assets/items/equipment.png",
+    unknown: "assets/items/unknown.png"
+  };
+
+  const TRAP_SPRITE_PATH = "assets/tiles/trap.png";
+
+  const UI_SPRITE_PATHS = {
+    title: "assets/backgrounds/title.png",
+    base: "assets/backgrounds/base.png",
+    panel: "assets/ui/panel.png"
+  };
+
+  const EFFECT_SPRITE_PATHS = {
+    slash: "assets/effects/slash.png",
+    laser: "assets/effects/laser.png",
+    spark: "assets/effects/spark.png",
+    terminal: "assets/effects/terminal_shutdown.png",
+    pollution: "assets/effects/pollution.png"
+  };
+
   const SPRITE_SCALE = {
     player: 2.15,
     cleaner: 1.95,
@@ -40,13 +76,61 @@ const Visuals = (() => {
   };
 
   const SPRITES = {};
-  if (typeof Image !== "undefined") {
-    for (const [key, src] of Object.entries(SPRITE_PATHS)) {
-      const img = new Image();
-      img.decoding = "async";
-      img.src = src;
-      SPRITES[key] = img;
+  const ASSET_STATE = { total: 0, loaded: 0, failed: 0, failedKeys: [], startedAt: Date.now() };
+
+  function registerSprite(key, src) {
+    ASSET_STATE.total++;
+    if (typeof Image === "undefined") {
+      ASSET_STATE.failed++;
+      ASSET_STATE.failedKeys.push(key);
+      return;
     }
+    const img = new Image();
+    img.decoding = "async";
+    img.onload = () => { ASSET_STATE.loaded++; };
+    img.onerror = () => { ASSET_STATE.failed++; ASSET_STATE.failedKeys.push(key); };
+    img.src = src;
+    SPRITES[key] = img;
+  }
+
+  const preloadMap = { ...SPRITE_PATHS };
+  for (const [tile, src] of Object.entries(TILE_SPRITE_PATHS)) preloadMap[`tile:${tile}`] = src;
+  for (const [category, src] of Object.entries(ITEM_ICON_PATHS)) preloadMap[`item:${category}`] = src;
+  for (const [key, src] of Object.entries(UI_SPRITE_PATHS)) preloadMap[`ui:${key}`] = src;
+  for (const [key, src] of Object.entries(EFFECT_SPRITE_PATHS)) preloadMap[`fx:${key}`] = src;
+  preloadMap["trap:discovered"] = TRAP_SPRITE_PATH;
+  for (const [key, src] of Object.entries(preloadMap)) registerSprite(key, src);
+
+  function assetStatus() {
+    const done = ASSET_STATE.loaded + ASSET_STATE.failed;
+    return {
+      total: ASSET_STATE.total,
+      loaded: ASSET_STATE.loaded,
+      failed: ASSET_STATE.failed,
+      done,
+      ready: done >= ASSET_STATE.total,
+      ratio: ASSET_STATE.total ? done / ASSET_STATE.total : 1,
+      failedKeys: [...ASSET_STATE.failedKeys]
+    };
+  }
+
+
+  function drawAssetBackground(ctx, key, x, y, w, h, fallbackA, fallbackB) {
+    const img = SPRITES[`ui:${key}`];
+    if (img && img.complete && img.naturalWidth > 0) {
+      ctx.drawImage(img, x, y, w, h);
+      return true;
+    }
+    const g = ctx.createLinearGradient(x, y, x + w, y + h);
+    g.addColorStop(0, fallbackA || "#08111a");
+    g.addColorStop(1, fallbackB || "#030507");
+    ctx.fillStyle = g;
+    ctx.fillRect(x, y, w, h);
+    return false;
+  }
+
+  function getAsset(key) {
+    return SPRITES[key] || null;
   }
 
   const COLORS = {
@@ -224,6 +308,25 @@ const Visuals = (() => {
     return true;
   }
 
+  function drawTileSprite(ctx, key, px, py, t, visible) {
+    if (!FEATURES.imageSprites || !spriteReady(key)) return false;
+    const img = SPRITES[key];
+    ctx.drawImage(img, px, py, t, t);
+    if (!visible) {
+      ctx.fillStyle = "rgba(0,0,0,0.58)";
+      ctx.fillRect(px, py, t, t);
+    }
+    return true;
+  }
+
+  function drawIconSprite(ctx, key, px, py, t, scale = 0.92) {
+    if (!FEATURES.imageSprites || !spriteReady(key)) return false;
+    const img = SPRITES[key];
+    const size = t * scale;
+    ctx.drawImage(img, px + (t - size) / 2, py + (t - size) / 2, size, size);
+    return true;
+  }
+
   function drawStunOverlay(ctx, px, py, t) {
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
@@ -385,6 +488,8 @@ const Visuals = (() => {
   }
 
   function tile(ctx, kind, px, py, t, visible) {
+    const tileKey = `tile:${kind}`;
+    if (drawTileSprite(ctx, tileKey, px, py, t, visible)) return;
     if (kind === TILE.WALL) return drawWallBlock(ctx, px, py, t, visible);
     if (kind === TILE.LIFT) return drawLift(ctx, px, py, t, visible);
     if (kind === TILE.CORE) return drawCore(ctx, px, py, t, visible);
@@ -409,6 +514,8 @@ const Visuals = (() => {
     const cx = px + t * 0.5;
     const cy = py + t * 0.50;
     const category = def.category || "unknown";
+    const iconCategory = kind === "nutrition_block" ? "food" : (category === "medicine" || kind === "water_filter") ? "medicine" : category === "equipment" ? "equipment" : category === "tactical" ? "tactical" : category === "device" ? "device" : "unknown";
+    if (drawIconSprite(ctx, `item:${iconCategory}`, px, py, t, 0.86)) return;
     if (category === "medicine" || kind === "water_filter") {
       glow(ctx, cx, cy, t * 0.28, "rgba(128,230,255,1)", 0.18);
       rect(ctx, px + t * 0.42, py + t * 0.30, t * 0.17, t * 0.34, "#b9f1ff", "#ffffff");
@@ -565,27 +672,66 @@ const Visuals = (() => {
     rect(ctx, px+t*.54, py+t*.28, t*.04, t*.04, "#111");
   }
 
+  function trap(ctx, px, py, t, visible) {
+    if (drawIconSprite(ctx, "trap:discovered", px, py, t, 0.84)) return;
+    const color = visible ? "#ffcc66" : "#59451c";
+    softShadow(ctx, px, py, t, 0.22, 0.20, 0.08);
+    poly(ctx, [[px+t*.30,py+t*.72],[px+t*.50,py+t*.25],[px+t*.72,py+t*.72]], "rgba(80,55,14,0.90)", color);
+    rect(ctx, px+t*.47, py+t*.42, t*.06, t*.17, color);
+    rect(ctx, px+t*.47, py+t*.63, t*.06, t*.06, color);
+  }
+
+  function drawFxSprite(ctx, key, cx, cy, t, progress, scale = 1.45, rotation = 0) {
+    const img = SPRITES[`fx:${key}`];
+    if (!img || !img.complete || img.naturalWidth <= 0) return false;
+    const size = t * scale * (0.86 + progress * 0.42);
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, 1 - progress * 0.88);
+    ctx.globalCompositeOperation = "lighter";
+    ctx.translate(cx, cy);
+    ctx.rotate(rotation);
+    ctx.drawImage(img, -size / 2, -size / 2, size, size);
+    ctx.restore();
+    return true;
+  }
+
   function fx(ctx, type, cx, cy, t, progress) {
     const alpha = Math.max(0, 1 - progress);
+    if (type === "hit" && drawFxSprite(ctx, "slash", cx, cy, t, progress, 1.55, -0.35)) return;
+    if ((type === "shoot" || type === "laser") && drawFxSprite(ctx, "laser", cx, cy, t, progress, 2.05, -0.18)) return;
+    if (type === "terminal" && drawFxSprite(ctx, "terminal", cx, cy, t, progress, 1.85, 0)) return;
+    if ((type === "defeat" || type === "spark") && drawFxSprite(ctx, "spark", cx, cy, t, progress, 1.75, 0)) return;
+    if (type === "pollution" && drawFxSprite(ctx, "pollution", cx, cy, t, progress, 1.65, 0)) return;
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.globalCompositeOperation = "lighter";
     if (type === "hit") {
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 2;
-      line(ctx, cx - t * 0.35, cy + t * 0.24, cx + t * 0.35, cy - t * 0.24, "#ffffff", 2);
-      line(ctx, cx - t * 0.22, cy - t * 0.22, cx + t * 0.22, cy + t * 0.22, "#b7ecff", 1);
+      for (let i = 0; i < 3; i++) {
+        const off = (i - 1) * t * 0.08;
+        line(ctx, cx - t * 0.42, cy + t * 0.25 + off, cx + t * 0.42, cy - t * 0.25 + off, i === 1 ? "#ffffff" : "#82e8ff", i === 1 ? 3 : 1.5);
+      }
     } else if (type === "hurt") {
       ctx.strokeStyle = "#ff6b6b";
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(cx, cy, t * (0.18 + 0.45 * progress), 0, Math.PI * 2);
+      ctx.arc(cx, cy, t * (0.18 + 0.55 * progress), 0, Math.PI * 2);
       ctx.stroke();
+      glow(ctx, cx, cy, t * 0.5, "rgba(255,70,70,1)", 0.12 * alpha);
     } else if (type === "defeat") {
-      for (let i = 0; i < 6; i++) {
-        const a = (Math.PI * 2 * i) / 6;
-        line(ctx, cx, cy, cx + Math.cos(a) * t * (0.14 + progress * 0.42), cy + Math.sin(a) * t * (0.14 + progress * 0.42), "#ffb347", 2);
+      for (let i = 0; i < 10; i++) {
+        const a = (Math.PI * 2 * i) / 10 + progress;
+        line(ctx, cx, cy, cx + Math.cos(a) * t * (0.18 + progress * 0.52), cy + Math.sin(a) * t * (0.18 + progress * 0.52), i % 2 ? "#ffb347" : "#fff0a0", 2);
       }
+    } else if (type === "terminal") {
+      ctx.strokeStyle = "#8ce9ff";
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, t * (0.20 + progress * 0.45 + i * 0.12), 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    } else if (type === "pollution") {
+      glow(ctx, cx, cy, t * (0.4 + progress * 0.5), "rgba(70,230,100,1)", 0.22 * alpha);
     } else {
       ctx.strokeStyle = "#ffe580";
       ctx.lineWidth = 2;
@@ -596,7 +742,7 @@ const Visuals = (() => {
     ctx.restore();
   }
 
-  return { glyph, tile, item, enemy, player, fx };
+  return { glyph, tile, item, enemy, player, trap, fx, assetStatus, getAsset, drawAssetBackground };
 })();
 
 
@@ -728,6 +874,64 @@ function createRenderer(elements) {
   }
 
   // ---- 世界の描画（毎フレーム） ----
+
+  function drawFloorEventOverlay(game, width, height, now) {
+    if (!FEATURES.floorEventVisuals || game.screen !== "run") return;
+    const type = game.floorEvent || "normal";
+    const phase = (now || 0) / 1000;
+    ctx.save();
+    if (type === "blackout") {
+      ctx.fillStyle = "rgba(0,0,0,0.32)";
+      ctx.fillRect(0, 0, width, height);
+      const g = ctx.createRadialGradient(width * 0.5, height * 0.5, Math.min(width, height) * 0.16, width * 0.5, height * 0.5, Math.max(width, height) * 0.62);
+      g.addColorStop(0, "rgba(0,0,0,0)");
+      g.addColorStop(1, "rgba(0,0,0,0.58)");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, width, height);
+      ctx.fillStyle = `rgba(86,190,255,${0.05 + 0.035 * Math.sin(phase * 5)})`;
+      for (let y = 0; y < height; y += 18) ctx.fillRect(0, y, width, 1);
+    } else if (type === "pollution_leak") {
+      const drift = (Math.sin(phase * 0.7) + 1) * 0.5;
+      ctx.globalCompositeOperation = "lighter";
+      ctx.fillStyle = `rgba(55,210,92,${0.07 + 0.04 * drift})`;
+      for (let i = 0; i < 7; i++) {
+        const x = ((i * 91 + phase * 18) % (width + 120)) - 60;
+        const y = (i * 47) % height;
+        ctx.beginPath();
+        ctx.ellipse(x, y, 72, 24, 0.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (type === "security_sweep") {
+      const a = 0.16 + 0.08 * Math.max(0, Math.sin(phase * 6));
+      ctx.strokeStyle = `rgba(255,65,55,${a})`;
+      ctx.lineWidth = 3;
+      ctx.strokeRect(5, 5, width - 10, height - 10);
+      ctx.fillStyle = `rgba(255,45,35,${a * 0.45})`;
+      ctx.fillRect(0, 0, width, 8);
+      ctx.fillRect(0, height - 8, width, 8);
+    } else if (type === "dismantle_shift") {
+      ctx.globalCompositeOperation = "lighter";
+      for (let i = 0; i < 10; i++) {
+        const x = (Math.sin(phase * 2 + i) * 0.5 + 0.5) * width;
+        const y = (i * 31 + Math.cos(phase + i) * 18) % height;
+        ctx.strokeStyle = `rgba(255,170,70,${0.10 + 0.08 * Math.sin(phase * 7 + i)})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + 18, y - 8);
+        ctx.stroke();
+      }
+    } else if (type === "supply_scatter") {
+      ctx.globalCompositeOperation = "lighter";
+      ctx.fillStyle = "rgba(255,211,92,0.055)";
+      ctx.fillRect(0, 0, width, height);
+    } else if (type === "quiet") {
+      ctx.fillStyle = "rgba(80,130,180,0.06)";
+      ctx.fillRect(0, 0, width, height);
+    }
+    ctx.restore();
+  }
+
   function drawWorld() {
     if (!lastGame) return;
     ensureSetup();
@@ -740,11 +944,8 @@ function createRenderer(elements) {
 
     ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
     ctx.clearRect(0, 0, cols * t, rows * t);
-    const bg = ctx.createLinearGradient(0, 0, cols * t, rows * t);
-    bg.addColorStop(0, "#05070b");
-    bg.addColorStop(0.55, "#080b0d");
-    bg.addColorStop(1, "#020203");
-    ctx.fillStyle = bg;
+    Visuals.drawAssetBackground(ctx, game.screen === "base" ? "base" : "title", 0, 0, cols * t, rows * t, "#05070b", "#020203");
+    ctx.fillStyle = "rgba(0,0,0,0.45)";
     ctx.fillRect(0, 0, cols * t, rows * t);
 
     const pp = dispOf("player", game.player.x, game.player.y);
@@ -816,6 +1017,8 @@ function createRenderer(elements) {
       game.fx = keep;
     }
 
+    drawFloorEventOverlay(game, cols * t, rows * t, now);
+
     const vignette = ctx.createRadialGradient(cols * t * 0.5, rows * t * 0.5, Math.min(cols, rows) * t * 0.2, cols * t * 0.5, rows * t * 0.5, Math.max(cols, rows) * t * 0.62);
     vignette.addColorStop(0, "rgba(0,0,0,0)");
     vignette.addColorStop(1, "rgba(0,0,0,0.42)");
@@ -825,6 +1028,8 @@ function createRenderer(elements) {
 
   function loop() {
     drawWorld();
+    const asset = Visuals.assetStatus ? Visuals.assetStatus() : { ready: true };
+    if (lastGame && !asset.ready) renderScreenPanel(lastGame);
     if (typeof requestAnimationFrame === "function") requestAnimationFrame(loop);
     else loopRunning = false;
   }
@@ -871,7 +1076,8 @@ function createRenderer(elements) {
 
   function renderLog(game) {
     clearNode(logPanel);
-    for (const message of game.logs) appendLine(logPanel, message);
+    const latest = game.logs.slice(0, 3);
+    for (const message of latest) appendLine(logPanel, message);
   }
 
   function renderStatus(game) {
@@ -885,7 +1091,11 @@ function createRenderer(elements) {
       ? (game.terminals?.some(t => t.active) ? "目的: 防衛端末を停止" : game.enemies.some(e => e.type === "guardian") ? "目的: 中枢防衛機を停止" : "目的: 浄水コアを回収")
       : "目的: 搬送リフトを探して深度を進める";
     const selected = game.inventory[game.selectedIndex] ? ` / 選択 ${game.selectedIndex + 1}:${getItemName(game, game.inventory[game.selectedIndex])}` : " / 選択 なし";
-    statusText.textContent = `${objective} / 難易度 ${currentDifficulty().name} / 深度 ${game.depth}/${CONFIG.maxDepth} / ターン ${game.turn} / 敵 ${game.enemies.length} / 全域 ${floorEvent}${terminals} / 装備 ${weapon}/${armor} / 開拓 ${countExplored(game)}${selected}${state}`;
+    if (view.mode === "mobile") {
+      statusText.textContent = `${objective}｜深度${game.depth}/${CONFIG.maxDepth}｜敵${game.enemies.length}｜${floorEvent}${terminals}${selected}${state}`;
+    } else {
+      statusText.textContent = `${objective}｜難易度 ${currentDifficulty().name}｜深度 ${game.depth}/${CONFIG.maxDepth}｜ターン ${game.turn}｜敵 ${game.enemies.length}｜全域 ${floorEvent}${terminals}｜装備 ${weapon}/${armor}｜開拓 ${countExplored(game)}${selected}${state}`;
+    }
     if (debugText) {
       debugText.textContent = `debug: ${view.mode} ${view.cols}x${view.rows} dpr${view.dpr} / gen ${game.debug.generationCount} / rooms ${game.rooms.length} / visible ${game.debug.visibleCount} / enemyTurn ${game.debug.enemyTurnCount} / fx ${Array.isArray(game.fx) ? game.fx.length : 0} / traps ${game.traps.length} / path ${game.debug.pathCheckCount}`;
     }
@@ -918,45 +1128,51 @@ function createRenderer(elements) {
   function renderInventory(game) {
     clearNode(inventoryPanel);
     const h = document.createElement("h2");
-    h.textContent = "所持品";
+    h.textContent = "所持品 / 選択";
     inventoryPanel.appendChild(h);
     if (game.inventory.length === 0) {
-      appendLine(inventoryPanel, "なし");
+      appendLine(inventoryPanel, "なし。足元の遺物は「拾う」で取得。");
       return;
     }
-    game.inventory.forEach((item, index) => {
-      const mark = index === game.selectedIndex ? "▶" : " ";
-      const def = ITEM_DEFS[item.kind];
-      const effect = currentDifficulty().unidentified && def?.hidden && !game.identified[item.kind] ? "効果不明" : (def?.effectText || "");
-      appendLine(inventoryPanel, `${mark}${index + 1}. ${getItemName(game, item)} - ${effect}`);
-    });
+    const selectedItem = game.inventory[game.selectedIndex];
+    if (selectedItem) {
+      const def = ITEM_DEFS[selectedItem.kind];
+      const effect = currentDifficulty().unidentified && def?.hidden && !game.identified[selectedItem.kind] ? "効果不明。鑑定または試用で判明。" : (def?.effectText || "説明なし");
+      appendLine(inventoryPanel, `▶ ${game.selectedIndex + 1}. ${getItemName(game, selectedItem)}`, "selected-line");
+      appendLine(inventoryPanel, effect, "muted-line");
+    }
+    const remaining = game.inventory
+      .map((item, index) => ({ item, index }))
+      .filter(row => row.index !== game.selectedIndex)
+      .slice(0, 5);
+    for (const row of remaining) appendLine(inventoryPanel, `${row.index + 1}. ${getItemName(game, row.item)}`);
   }
 
   function renderBase(game) {
     clearNode(basePanel);
     const h = document.createElement("h2");
-    h.textContent = "拠点 / 依頼";
+    h.textContent = "探索情報";
     basePanel.appendChild(h);
-    appendLine(basePanel, `浄水コア回収: ${game.settlement.cores}`);
-    appendLine(basePanel, `発掘回数: ${game.settlement.runs} / 最深到達: ${game.settlement.bestDepth}`);
-    const open = Object.values(MISSION_DEFS).filter(m => !game.completedMissions[m.key]).slice(0, 5);
-    for (const mission of open) appendLine(basePanel, `依頼: ${mission.title} - ${mission.desc}`);
-    const latest = Array.isArray(game.settlement.runLogs) ? game.settlement.runLogs[0] : null;
-    if (latest) appendLine(basePanel, `直近: ${latest.summary}`);
+    const floorEvent = FLOOR_EVENT_DEFS[game.floorEvent]?.name || "通常稼働";
+    appendLine(basePanel, `全域: ${floorEvent}`, "selected-line");
+    appendLine(basePanel, game.depth >= CONFIG.maxDepth ? `端末 ${game.disabledTerminals || 0}/${game.terminals?.length || 0}` : `深度 ${game.depth}/${CONFIG.maxDepth}`);
+    appendLine(basePanel, `発掘回数 ${game.settlement.runs} / 最深 ${game.settlement.bestDepth}`);
+    const open = Object.values(MISSION_DEFS).filter(m => !game.completedMissions[m.key]).slice(0, 2);
+    for (const mission of open) appendLine(basePanel, `依頼: ${mission.title}`);
   }
 
   function renderCodex(game) {
     clearNode(codexPanel);
     const h = document.createElement("h2");
-    h.textContent = "記録";
+    h.textContent = "発見記録";
     codexPanel.appendChild(h);
     if (!game.codex.length) {
-      appendLine(codexPanel, "未記録");
+      appendLine(codexPanel, "未記録。詳細はメニューから確認。");
       return;
     }
-    for (const entry of game.codex.slice(0, 10)) {
+    for (const entry of game.codex.slice(0, 5)) {
       const prefix = entry.key?.startsWith("enemy:") ? "敵" : entry.key?.startsWith("item:") ? "遺物" : entry.key?.startsWith("trap:") ? "罠" : entry.key?.startsWith("npc:") ? "住人" : "記録";
-      appendLine(codexPanel, `[${prefix}] ${entry.title}: ${entry.body}`);
+      appendLine(codexPanel, `[${prefix}] ${entry.title}`);
     }
   }
 
@@ -988,15 +1204,32 @@ function createRenderer(elements) {
   function renderScreenPanel(game) {
     if (!screenPanel) return;
     clearNode(screenPanel);
+    screenPanel.className = "screen-panel";
+    const asset = Visuals.assetStatus ? Visuals.assetStatus() : { ready: true, total: 0, loaded: 0, failed: 0, done: 0, ratio: 1, failedKeys: [] };
     const ended = game.screen === "run" && (game.isGameOver || game.isClear);
-    const active = game.helpOpen || game.tutorialOpen || game.storyOpen || game.endingOpen || game.runRecordOpen || game.runMenuOpen || game.inventoryOpen || game.npcDialog || ended || game.screen === "title" || game.screen === "base";
+    const active = !asset.ready || game.helpOpen || game.tutorialOpen || game.storyOpen || game.endingOpen || game.runRecordOpen || game.runMenuOpen || game.inventoryOpen || game.npcDialog || ended || game.screen === "title" || game.screen === "base";
     screenPanel.hidden = !active;
     if (!active) return;
 
     const h = document.createElement("h2");
     screenPanel.appendChild(h);
 
+    if (!asset.ready) {
+      screenPanel.classList.add("loading-screen");
+      h.textContent = "旧文明データを読込中";
+      appendPanelLine(`画像アセット ${asset.done}/${asset.total} 読み込み中。`, "menu-line");
+      appendPanelLine("読み込み中でも、失敗した画像はCanvas描画へ自動フォールバックする。", "muted-line");
+      const bar = document.createElement("div");
+      bar.className = "asset-load-bar";
+      const fill = document.createElement("span");
+      fill.style.width = `${Math.round((asset.ratio || 0) * 100)}%`;
+      bar.appendChild(fill);
+      screenPanel.appendChild(bar);
+      return;
+    }
+
     if (game.runMenuOpen) {
+      screenPanel.classList.add("compact-menu-screen");
       h.textContent = "探索メニュー";
       const floorEvent = FLOOR_EVENT_DEFS[game.floorEvent]?.name || "通常稼働";
       const floorDesc = FLOOR_EVENT_DEFS[game.floorEvent]?.desc || "特別な異常はない。";
@@ -1017,6 +1250,7 @@ function createRenderer(elements) {
     }
 
     if (game.inventoryOpen) {
+      screenPanel.classList.add("compact-menu-screen");
       h.textContent = "所持品一覧";
       if (!game.inventory.length) {
         appendPanelLine("所持品はない。足元の遺物は「拾う」で取得する。", "menu-line");
@@ -1044,6 +1278,7 @@ function createRenderer(elements) {
     }
 
     if (game.helpOpen) {
+      screenPanel.classList.add("compact-menu-screen");
       h.textContent = "ヘルプ / 操作説明";
       appendPanelLine("スマホ: 方向パッドで8方向移動、中央で足踏み。下段ボタンで拾う/使う・所持品・投げる・メニュー。", "menu-line");
       appendPanelLine("PC: 矢印/WASDで移動、斜めはQ/E/Z/Cまたはテンキー、.で足踏み。");
@@ -1055,6 +1290,7 @@ function createRenderer(elements) {
     }
 
     if (game.storyOpen) {
+      screenPanel.classList.add("story-screen");
       const page = STORY_PAGES[clamp(game.storyPage || 0, 0, STORY_PAGES.length - 1)];
       h.textContent = `${page.title} ${game.storyPage + 1}/${STORY_PAGES.length}`;
       for (const line of page.lines) appendPanelLine(line, "menu-line");
@@ -1063,6 +1299,7 @@ function createRenderer(elements) {
     }
 
     if (game.endingOpen) {
+      screenPanel.classList.add("story-screen");
       const page = ENDING_PAGES[clamp(game.endingPage || 0, 0, ENDING_PAGES.length - 1)];
       h.textContent = `${page.title} ${game.endingPage + 1}/${ENDING_PAGES.length}`;
       for (const line of page.lines) appendPanelLine(line, "menu-line");
@@ -1071,6 +1308,7 @@ function createRenderer(elements) {
     }
 
     if (game.runRecordOpen) {
+      screenPanel.classList.add("compact-menu-screen");
       h.textContent = "発掘記録";
       const logs = Array.isArray(game.settlement.runLogs) ? game.settlement.runLogs : [];
       if (!logs.length) appendPanelLine("まだ発掘記録はない。途中帰還、死亡、クリア時に記録される。", "menu-line");
@@ -1083,6 +1321,7 @@ function createRenderer(elements) {
     }
 
     if (game.npcDialog) {
+      screenPanel.classList.add("npc-screen");
       const talk = getNpcDialogue(game, game.npcDialog);
       h.textContent = `${talk.name} - ${talk.role}`;
       for (const line of talk.lines) appendPanelLine(line, "menu-line");
@@ -1098,6 +1337,7 @@ function createRenderer(elements) {
     }
 
     if (game.tutorialOpen) {
+      screenPanel.classList.add("compact-menu-screen");
       h.textContent = "初回ガイド";
       appendPanelLine("まずは部屋を出て通路を進み、見える範囲を広げる。", "menu-line");
       appendPanelLine("敵は常にこちらを把握しているわけではない。角を曲がる、通路に誘う、アイテムで止める判断が重要。");
@@ -1108,18 +1348,17 @@ function createRenderer(elements) {
     }
 
     if (game.screen === "base") {
-      h.textContent = "拠点 / 出発準備";
-      appendPanelLine(`浄水コア回収 ${game.settlement.cores} / 発掘回数 ${game.settlement.runs} / 最深到達 ${game.settlement.bestDepth}`, "menu-line");
-      appendPanelLine(`識別設定 ${currentDifficulty().name}`);
+      screenPanel.classList.add("base-screen", "base-menu-screen");
+      h.textContent = "外縁集落";
+      appendPanelLine("錆びた水管、仮設発電機、AI廃棄物で組んだ住居。ここが発掘家の帰る場所だ。", "menu-line");
+      appendPanelLine(`浄水コア ${game.settlement.cores} / 発掘 ${game.settlement.runs} / 最深 ${game.settlement.bestDepth} / 識別設定 ${currentDifficulty().name}`, "muted-line");
+      appendPanelLine("出発・設定", "section-line");
       appendButtons([
         { label: "探索開始", cmd: "start" },
-        { label: "識別設定切替", cmd: "difficulty" },
-        { label: "ストーリー", cmd: "story" },
-        { label: "エンディング", cmd: "ending" },
-        { label: "発掘記録", cmd: "records" },
+        { label: "識別設定", cmd: "difficulty" },
         { label: "ヘルプ", cmd: "help" }
       ]);
-      appendPanelLine("住人と話す:", "menu-line");
+      appendPanelLine("住人", "section-line");
       appendButtons([
         { label: "水守り", cmd: "talk", arg: 0 },
         { label: "老発掘家", cmd: "talk", arg: 1 },
@@ -1127,11 +1366,18 @@ function createRenderer(elements) {
         { label: "見張り", cmd: "talk", arg: 3 },
         { label: "記録係", cmd: "talk", arg: 4 }
       ]);
-      appendButtons([{ label: "保存データ初期化", cmd: "reset", danger: true }]);
+      appendPanelLine("記録", "section-line");
+      appendButtons([
+        { label: "ストーリー", cmd: "story" },
+        { label: "エンディング", cmd: "ending" },
+        { label: "発掘記録", cmd: "records" },
+        { label: "保存初期化", cmd: "reset", danger: true }
+      ]);
       return;
     }
 
     if (game.screen === "run" && (game.isGameOver || game.isClear)) {
+      screenPanel.classList.add("result-screen");
       h.textContent = game.isClear ? "クリア / 浄水コア回収" : "ゲームオーバー";
       appendPanelLine(game.isClear ? "浄水コアを持ち帰った。集落の水は延命された。" : (game.lastDeathCause || "発掘家は倒れた。"), game.isClear ? "menu-line" : "danger-line");
       appendPanelLine(`深度 ${game.depth} / ${game.turn}ターン / 撃破 ${game.debug.enemyDefeatCount}`);
@@ -1143,19 +1389,22 @@ function createRenderer(elements) {
       return;
     }
 
+    screenPanel.classList.add("title-screen", "title-menu-screen");
     h.textContent = "廃棄層の発掘家";
-    appendPanelLine("核戦争後、科学を失った人類は、AIが作って捨てる旧文明品を拾って生きている。", "menu-line");
-    appendPanelLine("あなたは発掘家。集落の浄水装置を延命するため、再構成され続ける廃棄区域へ潜る。");
-    appendPanelLine(`識別設定: ${currentDifficulty().name}`);
+    appendPanelLine("AIが作り、壊し、捨て続ける巨大廃棄層。水を守るため、発掘家は深部へ潜る。", "menu-line");
+    appendPanelLine(`識別設定: ${currentDifficulty().name} / 地図は歩いた範囲だけ開拓される。`, "muted-line");
+    appendPanelLine("メインメニュー", "section-line");
     appendButtons([
       { label: "探索開始", cmd: "start" },
       { label: "拠点", cmd: "base" },
-      { label: "ストーリー", cmd: "story" },
-      { label: "エンディング", cmd: "ending" },
-      { label: "発掘記録", cmd: "records" },
       { label: "ヘルプ", cmd: "help" }
     ]);
-    appendPanelLine("地図は最初から見えない。歩いた範囲だけが開拓される。", "muted-line");
+    appendPanelLine("資料", "section-line");
+    appendButtons([
+      { label: "ストーリー", cmd: "story" },
+      { label: "エンディング", cmd: "ending" },
+      { label: "発掘記録", cmd: "records" }
+    ]);
   }
 
   function toggleControlsState(game) {
@@ -1200,6 +1449,7 @@ function createRenderer(elements) {
 // --- input.js (キーボード) ---
 function bindInput(app) {
   window.addEventListener("keydown", event => {
+    if (typeof AudioSystem !== "undefined") AudioSystem.unlock();
     const key = event.key.toLowerCase();
     const code = event.code;
     const handled = ["arrowup", "arrowdown", "arrowleft", "arrowright", "w", "a", "s", "d", "q", "e", "z", "c", ".", "r", "n", "g", "f", "u", "m", "b", "h", "p", "l", "escape", "enter", "o", "[", "]", "t", "x", "1", "2", "3", "4", "5", "6", "7", "8", "i"];
@@ -1281,6 +1531,7 @@ function bindTouch(app) {
     const cmd = el.dataset.cmd;
     const fn = table[cmd];
     if (!fn) return false;
+    if (typeof AudioSystem !== "undefined") AudioSystem.unlock();
     fn(el.dataset.arg);
     return true;
   }

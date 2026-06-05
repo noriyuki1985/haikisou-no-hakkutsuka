@@ -365,3 +365,532 @@ kbd {
   .log { grid-column: span 1; }
   .box { max-height: 150px; }
 }
+
+
+/* v15.3.0 visual pass */
+.panel, .side, .box, .screen-panel {
+  backdrop-filter: blur(2px);
+}
+.bar-track {
+  box-shadow: inset 0 0 8px rgba(0,0,0,0.65);
+}
+.panel-btn, .abtn, .dbtn {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 12px rgba(0,0,0,0.20);
+}
+.panel-btn:hover, .abtn:hover, .dbtn:hover {
+  border-color: rgba(156,220,255,0.42);
+}
+
+
+/* ---- v15 rich presentation ---- */
+.screen-panel.title-screen,
+.screen-panel.base-screen,
+.screen-panel.loading-screen {
+  position: relative;
+  overflow: hidden;
+  min-height: 250px;
+  background-size: cover;
+  background-position: center;
+  border-color: rgba(117, 213, 255, 0.36);
+}
+
+.screen-panel.title-screen {
+  background-image:
+    linear-gradient(90deg, rgba(3,7,12,0.90), rgba(5,12,18,0.68) 48%, rgba(2,4,7,0.88)),
+    url("assets/backgrounds/title.png");
+}
+
+.screen-panel.base-screen {
+  background-image:
+    linear-gradient(90deg, rgba(4,8,10,0.92), rgba(8,18,16,0.68) 50%, rgba(3,5,7,0.88)),
+    url("assets/backgrounds/base.png");
+}
+
+.screen-panel.loading-screen {
+  background-image:
+    radial-gradient(circle at 20% 20%, rgba(95,216,255,0.20), transparent 30%),
+    linear-gradient(140deg, rgba(5,10,15,0.98), rgba(4,7,9,0.94));
+}
+
+.screen-panel.title-screen h2,
+.screen-panel.base-screen h2,
+.screen-panel.loading-screen h2 {
+  font-size: clamp(24px, 4vw, 42px);
+  letter-spacing: 0.08em;
+  color: #eefaff;
+  text-shadow: 0 0 22px rgba(112, 220, 255, 0.34), 0 2px 0 rgba(0,0,0,0.6);
+}
+
+.screen-panel.title-screen::before,
+.screen-panel.base-screen::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(rgba(110,210,255,0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(110,210,255,0.04) 1px, transparent 1px);
+  background-size: 24px 24px;
+  mix-blend-mode: screen;
+}
+
+.screen-panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+.asset-load-bar {
+  width: min(440px, 100%);
+  height: 14px;
+  margin: 14px 0 6px;
+  border: 1px solid rgba(120,220,255,0.42);
+  border-radius: 999px;
+  background: rgba(0,0,0,0.45);
+  overflow: hidden;
+  box-shadow: inset 0 1px 5px rgba(0,0,0,0.8), 0 0 18px rgba(120,220,255,0.12);
+}
+
+.asset-load-bar span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #55d9ff, #8dffd6);
+  box-shadow: 0 0 18px rgba(100,235,255,0.55);
+  transition: width 140ms ease;
+}
+
+/* ---- v16.4.0 UI refactor: compact, non-overlapping mobile-first layout ---- */
+.screen-panel.story-screen,
+.screen-panel.npc-screen,
+.screen-panel.result-screen,
+.screen-panel.compact-menu-screen {
+  border-color: rgba(145, 225, 255, 0.34);
+}
+
+.screen-panel.npc-screen {
+  background-image:
+    linear-gradient(90deg, rgba(5,10,14,0.96), rgba(8,18,20,0.86)),
+    url("assets/backgrounds/base.png");
+  background-size: cover;
+  background-position: center;
+}
+
+.screen-panel.story-screen {
+  background-image:
+    linear-gradient(90deg, rgba(3,7,12,0.96), rgba(9,16,22,0.86)),
+    url("assets/backgrounds/title.png");
+  background-size: cover;
+  background-position: center;
+}
+
+@media (min-width: 761px) {
+  .game {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    grid-template-areas:
+      "top top"
+      "screen screen"
+      "play hud"
+      "controls hud"
+      "hint hint";
+    gap: 12px;
+    align-items: start;
+  }
+  .panel { grid-area: top; }
+  .screen-panel { grid-area: screen; }
+  .play-area { grid-area: play; grid-template-columns: minmax(0, 1fr); }
+  .controls { grid-area: controls; }
+  .hud {
+    grid-area: hud;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin-top: 0;
+    position: sticky;
+    top: 12px;
+  }
+  .log { grid-column: auto; max-height: 180px; }
+  .hint { grid-area: hint; }
+  .side { display: block; }
+}
+
+@media (max-width: 760px) {
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  body { position: fixed; inset: 0; width: 100%; }
+  .game {
+    height: 100dvh;
+    max-width: none;
+    padding: max(5px, env(safe-area-inset-top)) 6px max(5px, env(safe-area-inset-bottom));
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    gap: 5px;
+    overflow: hidden;
+  }
+  .panel {
+    margin: 0;
+    padding: 6px 8px;
+    border-radius: 10px;
+  }
+  .panel h1 {
+    font-size: 14px;
+    line-height: 1.1;
+    margin: 0 0 4px;
+  }
+  .panel h1 .ver { font-size: 10px; margin-left: 4px; }
+  .panel .status {
+    font-size: 10px;
+    line-height: 1.25;
+    margin: 2px 0 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .bars {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+    margin: 3px 0;
+  }
+  .bar { gap: 3px; font-size: 9px; min-width: 0; }
+  .bar-label { width: 24px; font-size: 9px; }
+  .bar-track { height: 8px; }
+  .bar-val { display: none; }
+  .play-area {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr;
+    min-height: 0;
+    overflow: hidden;
+    place-items: center;
+  }
+  #gameCanvas {
+    width: auto !important;
+    max-width: 100%;
+    max-height: calc(100dvh - 238px);
+    aspect-ratio: auto;
+  }
+  .side {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 3;
+    width: 92px;
+    padding: 4px;
+    border-radius: 8px;
+    background: rgba(5, 8, 12, 0.72);
+  }
+  .side h2, .side .note { display: none; }
+  #miniMapCanvas {
+    width: 82px;
+    max-width: 82px;
+    border-width: 1px;
+    border-radius: 6px;
+  }
+  .controls {
+    position: static;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    justify-content: stretch;
+    gap: 8px;
+    margin: 0;
+    padding: 5px;
+    border-radius: 12px;
+    background: rgba(7, 9, 12, 0.92);
+    border: 1px solid rgba(119, 200, 255, 0.16);
+  }
+  .dpad {
+    grid-template-columns: repeat(3, 42px);
+    grid-template-rows: repeat(3, 42px);
+    gap: 4px;
+  }
+  .dbtn { font-size: 17px; border-radius: 8px; }
+  .action-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    min-width: 0;
+    width: 100%;
+  }
+  .abtn {
+    min-height: 40px;
+    padding: 5px 6px;
+    font-size: 12px;
+    border-radius: 8px;
+  }
+  .hud {
+    margin: 0;
+    display: grid;
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+  #inventoryPanel, #basePanel, #codexPanel { display: none; }
+  .log {
+    display: block;
+    grid-column: auto;
+    min-height: 44px;
+    max-height: 54px;
+    padding: 6px 8px;
+    overflow: hidden;
+    border-radius: 9px;
+  }
+  .log p {
+    font-size: 10px;
+    line-height: 1.28;
+    margin: 0;
+  }
+  .log p:nth-child(n+4) { display: none; }
+  .screen-panel {
+    position: fixed;
+    inset: max(6px, env(safe-area-inset-top)) 6px max(6px, env(safe-area-inset-bottom));
+    z-index: 30;
+    margin: 0;
+    padding: 10px;
+    max-height: none;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border-radius: 12px;
+  }
+  .screen-panel[hidden] { display: none; }
+  .screen-panel h2 {
+    flex: 0 0 auto;
+    font-size: 18px;
+    line-height: 1.2;
+    margin: 0 0 3px;
+  }
+  .screen-panel p {
+    font-size: 12px;
+    line-height: 1.38;
+    margin: 2px 0;
+  }
+  .screen-panel .btn-row {
+    flex: 0 0 auto;
+    gap: 6px;
+    margin: 5px 0 0;
+  }
+  .panel-btn {
+    min-height: 38px;
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  .panel-btn.item-row {
+    min-height: 34px;
+    padding: 5px 8px;
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .screen-panel.compact-menu-screen p:nth-of-type(n+8),
+  .screen-panel.story-screen p:nth-of-type(n+6),
+  .screen-panel.npc-screen p:nth-of-type(n+8) {
+    display: none;
+  }
+}
+
+@media (max-width: 380px) {
+  .dpad {
+    grid-template-columns: repeat(3, 38px);
+    grid-template-rows: repeat(3, 38px);
+  }
+  .abtn { min-height: 36px; font-size: 11px; }
+  #gameCanvas { max-height: calc(100dvh - 224px); }
+}
+
+/* ---- v16.1.0 - v16.4.0 UI completion ---- */
+.status {
+  font-weight: 700;
+  color: #dff7ff !important;
+  background: linear-gradient(90deg, rgba(83, 186, 255, 0.13), rgba(0,0,0,0.0));
+  border-left: 3px solid rgba(112, 218, 255, 0.72);
+  padding: 5px 8px;
+  border-radius: 7px;
+}
+
+.selected-line {
+  color: #effcff !important;
+  font-weight: 700;
+  background: rgba(92, 190, 255, 0.12);
+  border-left: 3px solid #73d5ff;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+
+.section-line {
+  margin-top: 10px !important;
+  color: #8fe7ff !important;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(143, 231, 255, 0.2);
+  padding-bottom: 3px;
+}
+
+.menu-line { color: #f4d98d; }
+.muted-line { color: #9aa8b4; }
+
+@media (min-width: 761px) {
+  .panel { padding: 12px 16px; }
+  .bars { grid-template-columns: 1fr 1fr 1fr; }
+  .play-area {
+    position: relative;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .side {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 210px;
+    background: rgba(4, 8, 12, 0.76);
+  }
+  .side h2 { font-size: 13px; }
+  .side .note { margin-bottom: 0; }
+  #miniMapCanvas { max-width: 184px; }
+  .hud .box {
+    min-height: 86px;
+    max-height: 150px;
+  }
+  #inventoryPanel { order: 1; }
+  #basePanel { order: 2; }
+  #codexPanel { order: 3; }
+  #logPanel { order: 4; }
+  .log p:nth-child(n+4) { display: none; }
+}
+
+.title-menu-screen,
+.base-menu-screen {
+  display: block;
+}
+
+.title-menu-screen .btn-row,
+.base-menu-screen .btn-row,
+.compact-menu-screen .btn-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+}
+
+.title-menu-screen .panel-btn,
+.base-menu-screen .panel-btn {
+  min-height: 46px;
+  font-weight: 700;
+}
+
+@media (max-width: 760px) {
+  .game {
+    grid-template-rows: auto minmax(0, 1fr) auto 46px;
+  }
+  .panel h1::before { margin-right: 4px; }
+  .status {
+    padding: 3px 6px;
+    font-size: 10px !important;
+  }
+  .play-area {
+    align-self: stretch;
+  }
+  #gameCanvas {
+    max-height: calc(100dvh - 214px);
+  }
+  .side {
+    width: 78px;
+    top: 4px;
+    right: 4px;
+    padding: 3px;
+  }
+  #miniMapCanvas {
+    width: 70px;
+    max-width: 70px;
+  }
+  .controls {
+    grid-template-columns: 134px minmax(0, 1fr);
+    gap: 6px;
+    padding: 4px;
+  }
+  .dpad {
+    grid-template-columns: repeat(3, 40px);
+    grid-template-rows: repeat(3, 40px);
+    gap: 4px;
+  }
+  .dbtn { font-size: 16px; }
+  .action-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 5px;
+  }
+  .abtn {
+    min-height: 38px;
+    padding: 4px 5px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .primary-action { grid-column: span 2; }
+  .log {
+    min-height: 40px;
+    max-height: 46px;
+  }
+  .screen-panel {
+    display: block;
+    overflow: hidden;
+  }
+  .screen-panel .btn-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 5px;
+  }
+  .screen-panel.title-screen .btn-row,
+  .screen-panel.base-screen .btn-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .screen-panel h2 {
+    font-size: 17px;
+  }
+  .screen-panel p {
+    font-size: 11px;
+    line-height: 1.32;
+  }
+  .section-line {
+    margin-top: 6px !important;
+    padding-bottom: 2px;
+  }
+  .panel-btn {
+    min-height: 34px;
+    padding: 5px 6px;
+    font-size: 11px;
+  }
+  .title-menu-screen .panel-btn,
+  .base-menu-screen .panel-btn { min-height: 34px; }
+  .screen-panel.base-screen p:nth-of-type(n+7),
+  .screen-panel.title-screen p:nth-of-type(n+6),
+  .screen-panel.compact-menu-screen p:nth-of-type(n+7),
+  .screen-panel.story-screen p:nth-of-type(n+6),
+  .screen-panel.npc-screen p:nth-of-type(n+8) { display: none; }
+}
+
+@media (max-width: 380px) {
+  .game { grid-template-rows: auto minmax(0, 1fr) auto 42px; }
+  #gameCanvas { max-height: calc(100dvh - 198px); }
+  .controls { grid-template-columns: 122px minmax(0, 1fr); }
+  .dpad {
+    grid-template-columns: repeat(3, 36px);
+    grid-template-rows: repeat(3, 36px);
+    gap: 3px;
+  }
+  .abtn { min-height: 34px; font-size: 10px; }
+  .log { min-height: 36px; max-height: 42px; }
+}
+
+@media (max-width: 760px) and (orientation: landscape) {
+  .game {
+    grid-template-columns: minmax(0, 1fr) 250px;
+    grid-template-rows: auto minmax(0, 1fr) 42px;
+    grid-template-areas:
+      "top controls"
+      "play controls"
+      "hud controls";
+  }
+  .panel { grid-area: top; }
+  .play-area { grid-area: play; }
+  .controls { grid-area: controls; align-self: stretch; grid-template-columns: 122px 1fr; }
+  .hud { grid-area: hud; }
+  #gameCanvas { max-height: calc(100dvh - 92px); }
+}

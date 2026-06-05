@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>廃棄層の発掘家 v14.0.0</title>
+  <title>廃棄層の発掘家 v16.4.0</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <main class="game">
     <section class="panel">
-      <h1>廃棄層の発掘家 <span id="versionText" class="ver">Version: v14.0.0</span></h1>
+      <h1>廃棄層の発掘家 <span id="versionText" class="ver">Version: v16.4.0</span></h1>
       <div class="bars">
         <div class="bar"><span class="bar-label">HP</span><span class="bar-track"><span id="hpFill" class="bar-fill"></span></span><span id="hpText" class="bar-val">-</span></div>
         <div class="bar"><span class="bar-label">空腹</span><span class="bar-track"><span id="hungerFill" class="bar-fill"></span></span><span id="hungerText" class="bar-val">-</span></div>
@@ -43,10 +43,10 @@
         <button type="button" class="dbtn" data-cmd="move" data-arg="1,1" aria-label="右下">↘</button>
       </div>
       <div class="action-bar">
-        <button type="button" class="abtn" data-cmd="pickup"><span id="actionPickupLabel">拾う</span></button>
-        <button type="button" class="abtn" data-cmd="inventory">所持品</button>
+        <button type="button" class="abtn primary-action" data-cmd="pickup"><span id="actionPickupLabel">拾う/使う</span></button>
+        <button type="button" class="abtn" data-cmd="inventory">袋</button>
         <button type="button" class="abtn" data-cmd="throw">投げる</button>
-        <button type="button" class="abtn" data-cmd="menu">メニュー</button>
+        <button type="button" class="abtn" data-cmd="menu">MENU</button>
       </div>
     </section>
 
