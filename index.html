@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>廃棄層の発掘家 v16.4.2</title>
+  <title>廃棄層の発掘家 v17.4.0</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <main class="game">
     <section class="panel">
-      <h1>廃棄層の発掘家 <span id="versionText" class="ver">Version: v16.4.2</span></h1>
+      <h1>廃棄層の発掘家 <span id="versionText" class="ver">Version: v17.4.0</span></h1>
       <div class="bars">
         <div class="bar"><span class="bar-label">HP</span><span class="bar-track"><span id="hpFill" class="bar-fill"></span></span><span id="hpText" class="bar-val">-</span></div>
         <div class="bar"><span class="bar-label">空腹</span><span class="bar-track"><span id="hungerFill" class="bar-fill"></span></span><span id="hungerText" class="bar-val">-</span></div>
@@ -45,7 +45,7 @@
       <div class="action-bar">
         <button type="button" class="abtn primary-action" data-cmd="pickup"><span id="actionPickupLabel">拾う/使う</span></button>
         <button type="button" class="abtn" data-cmd="inventory">袋</button>
-        <button type="button" class="abtn" data-cmd="throw">投げる</button>
+        <button type="button" class="abtn secondary-throw" data-cmd="throw">投げる</button>
         <button type="button" class="abtn" data-cmd="menu">MENU</button>
       </div>
     </section>
@@ -57,7 +57,7 @@
       <section class="box log" id="logPanel"><p>発掘家は再構成された廃棄区域に足を踏み入れた。</p></section>
     </section>
 
-    <p class="hint">PC: 矢印/WASD移動、QEZC/テンキーで斜め、.足踏み、G拾う、I所持品、1〜8選択、U使用、X置く、T投げる、F調べる、Mメニュー、B拠点、P帰還、L記録、N新規、Enter/Escで送り/閉じる。スマホ: 方向パッドと下段ボタンで操作。</p>
+    <p class="hint">スマホ基準: 集落で住人から目的を確認し、発掘へ出発。探索中は方向パッド、拾う/使う、袋、MENUを使う。</p>
   </main>
 
   <script src="src/core.js"></script>

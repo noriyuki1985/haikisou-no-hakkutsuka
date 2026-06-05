@@ -1,6 +1,6 @@
 // --- config.js ---
-const VERSION = "v16.4.2";
-const FEATURE_LEVEL = 1600;
+const VERSION = "v17.4.0";
+const FEATURE_LEVEL = 1740;
 
 const FEATURES = {
   items: true,
@@ -57,7 +57,10 @@ const FEATURES = {
   assetManagerV15: true,
   richTitleV15: true,
   richBaseV15: true,
-  enhancedCombatFxV15: true
+  enhancedCombatFxV15: true,
+  mobileFirstV17: true,
+  settlementStartV17: true,
+  toastLogV17: true
 };
 
 const TILE = {
@@ -75,7 +78,7 @@ const CONFIG = {
   mapHeight: 32,
   viewportWidth: 21,
   viewportHeight: 15,
-  viewportWidthMobile: 11,
+  viewportWidthMobile: 9,
   viewportHeightMobile: 9,
   mobileBreakpoint: 760,
   moveAnimMs: 135,

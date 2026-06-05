@@ -1333,8 +1333,9 @@ function createRenderer(elements) {
     if (game.npcDialog) {
       screenPanel.classList.add("npc-screen");
       const talk = getNpcDialogue(game, game.npcDialog);
-      h.textContent = `${talk.name} - ${talk.role}`;
-      for (const line of talk.lines) appendPanelLine(line, "menu-line");
+      h.textContent = `${talk.name}`;
+      appendPanelLine(talk.role, "section-line");
+      for (const line of talk.lines.slice(0, 3)) appendPanelLine(line, "menu-line");
       appendButtons([
         { label: "水守り", cmd: "talk", arg: 0 },
         { label: "老発掘家", cmd: "talk", arg: 1 },
@@ -1358,17 +1359,11 @@ function createRenderer(elements) {
     }
 
     if (game.screen === "base") {
-      screenPanel.classList.add("base-screen", "base-menu-screen");
+      screenPanel.classList.add("base-screen", "base-menu-screen", "settlement-screen");
       h.textContent = "外縁集落";
-      appendPanelLine("錆びた水管、仮設発電機、AI廃棄物で組んだ住居。ここが発掘家の帰る場所だ。", "menu-line");
-      appendPanelLine(`浄水コア ${game.settlement.cores} / 発掘 ${game.settlement.runs} / 最深 ${game.settlement.bestDepth} / 識別設定 ${currentDifficulty().name}`, "muted-line");
-      appendPanelLine("出発・設定", "section-line");
-      appendButtons([
-        { label: "探索開始", cmd: "start" },
-        { label: "識別設定", cmd: "difficulty" },
-        { label: "ヘルプ", cmd: "help" }
-      ]);
-      appendPanelLine("住人", "section-line");
+      appendPanelLine("AIが作り捨てる廃棄層の外側。住人に話し、目的を確認してから発掘へ向かう。", "menu-line");
+      appendPanelLine(`浄水コア ${game.settlement.cores} / 発掘 ${game.settlement.runs} / 最深 ${game.settlement.bestDepth}`, "muted-line");
+      appendPanelLine("住人に話す", "section-line");
       appendButtons([
         { label: "水守り", cmd: "talk", arg: 0 },
         { label: "老発掘家", cmd: "talk", arg: 1 },
@@ -1376,12 +1371,12 @@ function createRenderer(elements) {
         { label: "見張り", cmd: "talk", arg: 3 },
         { label: "記録係", cmd: "talk", arg: 4 }
       ]);
-      appendPanelLine("記録", "section-line");
+      appendPanelLine("行動", "section-line");
       appendButtons([
-        { label: "ストーリー", cmd: "story" },
-        { label: "エンディング", cmd: "ending" },
-        { label: "発掘記録", cmd: "records" },
-        { label: "保存初期化", cmd: "reset", danger: true }
+        { label: "発掘へ", cmd: "start" },
+        { label: "識別設定", cmd: "difficulty" },
+        { label: "記録", cmd: "records" },
+        { label: "ヘルプ", cmd: "help" }
       ]);
       return;
     }

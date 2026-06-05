@@ -412,10 +412,10 @@ function createGameApp(elements) {
     game.tutorialSeen = settings.tutorialSeen;
     game.storySeen = settings.storySeen;
     game.endingSeen = settings.endingSeen;
-    game.screen = "title";
+    game.screen = "base";
     game.helpOpen = false;
     game.tutorialOpen = false;
-    game.storyOpen = !settings.storySeen;
+    game.storyOpen = false;
     game.storyPage = 0;
     game.npcDialog = null;
     MapSystem.generate(game);
@@ -423,7 +423,7 @@ function createGameApp(elements) {
     World.recordCodex(game, "world:waste-zone", "再構成廃棄区域", "AIが作り、壊し、捨て続ける区域。人類はそこから文明の残骸を拾っている。 ");
     World.recordCodex(game, "world:mission", "依頼", "発掘家は集落の依頼を受けて廃棄区域へ潜る。達成時は発掘記録に残る。 ");
     World.recordCodex(game, "world:settlement", "集落", "水守り、老発掘家、修理屋、見張り、記録係がいる。拠点で1〜5を押すと会話できる。 ");
-    World.addLog(game, "タイトル画面。Enterで探索開始、Bで拠点、Sでストーリー、Eでエンディング、Hでヘルプ。 ");
+    World.addLog(game, "外縁集落。住人に話してから発掘へ向かう。 ");
     World.addLog(game, `区画生成完了。部屋数 ${game.rooms.length}。敵 ${game.enemies.length} 体を検出。`);
     if (FEATURES.floorEvents) World.addLog(game, `フロアイベント: ${FLOOR_EVENT_DEFS[game.floorEvent]?.name || "通常稼働"}。`);
     render();
@@ -476,7 +476,7 @@ function createGameApp(elements) {
     if (game.runMenuOpen) game.runMenuOpen = false;
     if (game.inventoryOpen) game.inventoryOpen = false;
     if (game.npcDialog) game.npcDialog = null;
-    game.screen = game.screen === "base" ? (game.hasStarted ? "run" : "title") : "base";
+    game.screen = game.screen === "base" ? (game.hasStarted ? "run" : "base") : "base";
     render();
   }
 
@@ -519,7 +519,7 @@ function createGameApp(elements) {
       game.tutorialSeen = true;
       persistUiSettings();
     } else if (game.screen === "base") {
-      game.screen = game.hasStarted ? "run" : "title";
+      game.screen = game.hasStarted ? "run" : "base";
     }
     render();
   }
@@ -534,7 +534,7 @@ function createGameApp(elements) {
     game.inventoryOpen = false;
     game.endingOpen = false;
     game.runRecordOpen = false;
-    game.storyOpen = true;
+    game.storyOpen = false;
     game.storyPage = 0;
     render();
     return true;
@@ -683,11 +683,11 @@ function createGameApp(elements) {
     clearSaveData();
     DIFFICULTY.current = "clear";
     resetRunState(false);
-    game.screen = "title";
+    game.screen = "base";
     game.tutorialSeen = false;
     game.storySeen = false;
     game.tutorialOpen = false;
-    game.storyOpen = true;
+    game.storyOpen = false;
     game.storyPage = 0;
     game.endingOpen = false;
     game.endingPage = 0;
