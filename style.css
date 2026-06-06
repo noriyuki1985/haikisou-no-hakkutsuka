@@ -1075,3 +1075,196 @@ kbd {
   .panel-btn { min-height: 30px; font-size: 10px; }
   .log { max-height: 30px; }
 }
+
+/* v17.5.0-a1: in-screen translucent controls */
+.game-stage {
+  position: relative;
+  min-width: 0;
+  width: 100%;
+}
+
+.controls-overlay {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 20;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  pointer-events: none;
+}
+
+.controls-overlay.controls-dim {
+  opacity: 0.58;
+}
+
+.controls-overlay .dpad,
+.controls-overlay .action-bar {
+  pointer-events: auto;
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(119, 200, 255, 0.18);
+  background: rgba(8, 12, 18, 0.24);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+}
+
+.controls-overlay .dpad {
+  display: grid;
+  grid-template-columns: repeat(3, 48px);
+  grid-template-rows: repeat(3, 48px);
+  gap: 5px;
+  align-content: center;
+  justify-content: center;
+}
+
+.controls-overlay .action-bar {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(3, 1fr);
+  gap: 6px;
+  width: min(220px, 42%);
+}
+
+.controls-overlay .primary-action {
+  grid-column: 1 / -1;
+}
+
+.controls-overlay .secondary-throw {
+  display: block;
+}
+
+.controls-overlay .dbtn,
+.controls-overlay .abtn {
+  color: #eef7ff;
+  background: rgba(18, 26, 38, 0.46);
+  border: 1px solid rgba(155, 215, 255, 0.22);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 12px rgba(0,0,0,0.18);
+}
+
+.controls-overlay .dbtn:active,
+.controls-overlay .abtn:active {
+  background: rgba(30, 42, 58, 0.68);
+}
+
+.controls-overlay .dbtn {
+  font-size: 20px;
+}
+
+.controls-overlay .abtn {
+  min-height: 40px;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+@media (max-width: 760px) {
+  :root {
+    --mobile-controls-h: 120px;
+  }
+
+  .game {
+    grid-template-rows: var(--mobile-hud-h) minmax(0, 1fr);
+  }
+
+  .game-stage {
+    width: 100%;
+    max-width: 100%;
+    max-height: 100%;
+  }
+
+  #gameCanvas {
+    margin: 0 auto;
+  }
+
+  .controls.controls-overlay {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    height: auto;
+    min-height: 0;
+    padding: 0;
+    display: flex;
+    grid-template-columns: none;
+    grid-template-rows: none;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 7px;
+    background: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .controls.controls-overlay .dpad {
+    grid-template-columns: repeat(3, 36px);
+    grid-template-rows: repeat(3, 36px);
+    gap: 4px;
+    padding: 8px;
+    border-radius: 12px;
+  }
+
+  .controls.controls-overlay .action-bar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(3, 1fr);
+    width: min(160px, 44%);
+    gap: 5px;
+    padding: 8px;
+    border-radius: 12px;
+  }
+
+  .controls.controls-overlay .primary-action {
+    grid-column: 1 / -1;
+  }
+
+  .controls.controls-overlay .secondary-throw {
+    display: block !important;
+  }
+
+  .controls.controls-overlay .dbtn {
+    font-size: 15px;
+    border-radius: 8px;
+  }
+
+  .controls.controls-overlay .abtn {
+    min-height: 30px;
+    padding: 3px 5px;
+    font-size: 11px;
+    border-radius: 8px;
+  }
+
+  .hud {
+    bottom: calc(var(--mobile-controls-h) + max(8px, env(safe-area-inset-bottom)));
+  }
+}
+
+@media (max-width: 380px) {
+  .controls.controls-overlay .dpad {
+    grid-template-columns: repeat(3, 32px);
+    grid-template-rows: repeat(3, 32px);
+    gap: 3px;
+    padding: 7px;
+  }
+
+  .controls.controls-overlay .action-bar {
+    width: min(142px, 45%);
+    padding: 7px;
+    gap: 4px;
+  }
+
+  .controls.controls-overlay .abtn {
+    min-height: 28px;
+    font-size: 10px;
+  }
+}

@@ -2,6 +2,8 @@
 const Visuals = (() => {
   const SPRITE_PATHS = {
     player: "assets/characters/player.png",
+    player_town: "assets/characters/player_town.png",
+    player_dungeon: "assets/characters/player_dungeon.png",
     cleaner: "assets/characters/cleaner.png",
     hunter: "assets/characters/hunter.png",
     soldier: "assets/characters/soldier.png",
@@ -50,20 +52,47 @@ const Visuals = (() => {
   };
 
   const SPRITE_SCALE = {
-    player: 2.15,
-    cleaner: 1.95,
-    hunter: 2.08,
-    soldier: 2.30,
-    builder: 2.20,
-    dismantler: 2.30,
-    logistics: 2.00,
-    medic: 2.05,
-    sorter: 2.10,
-    guardian: 2.85
+    player: 1.78,
+    player_town: 1.78,
+    player_dungeon: 1.78,
+    cleaner: 1.70,
+    hunter: 1.72,
+    soldier: 1.74,
+    builder: 1.72,
+    dismantler: 1.74,
+    logistics: 1.72,
+    medic: 1.72,
+    sorter: 1.70,
+    guardian: 1.82
+  };
+
+  const SPRITE_FOOT_OFFSET_Y = {
+    player: 0.04,
+    player_town: 0.04,
+    player_dungeon: 0.04,
+    builder: 0.04,
+    medic: 0.04,
+    logistics: 0.04,
+    cleaner: 0.06,
+    hunter: 0.06,
+    sorter: 0.06,
+    dismantler: 0.07,
+    soldier: 0.07,
+    guardian: 0.08
+  };
+
+  const NPC_SPRITE_KEYS = {
+    water_keeper: "medic",
+    old_digger: "logistics",
+    mechanic: "builder",
+    lookout: "soldier",
+    recorder: "sorter"
   };
 
   const ANIM_PROFILES = {
     player: { ms: 1800, bob: 0.030, sway: 0.018, scaleX: 0.010, scaleY: 0.014, glow: "rgba(126,220,255,1)" },
+    player_town: { ms: 1800, bob: 0.030, sway: 0.018, scaleX: 0.010, scaleY: 0.014, glow: "rgba(126,220,255,1)" },
+    player_dungeon: { ms: 1800, bob: 0.030, sway: 0.018, scaleX: 0.010, scaleY: 0.014, glow: "rgba(126,220,255,1)" },
     cleaner: { ms: 1200, bob: 0.010, sway: 0.010, scaleX: 0.010, scaleY: 0.006, glow: "rgba(255,80,70,1)" },
     hunter: { ms: 950, bob: 0.040, sway: 0.032, scaleX: 0.008, scaleY: 0.016, glow: "rgba(255,70,62,1)" },
     soldier: { ms: 1500, bob: 0.018, sway: 0.010, scaleX: 0.006, scaleY: 0.010, glow: "rgba(255,60,45,1)" },
@@ -285,13 +314,14 @@ const Visuals = (() => {
     const moveProgress = clamp(options.moveProgress ?? 1, 0, 1);
     const moveLift = moving ? Math.sin(moveProgress * Math.PI) : 0;
     const scale = options.scale || SPRITE_SCALE[key] || 2.0;
+    const footOffsetY = options.offsetY ?? SPRITE_FOOT_OFFSET_Y[key] ?? 0;
     const size = t * scale;
     const bob = t * ((profile.bob || 0) * idle - 0.11 * moveLift);
     const rotate = (profile.sway || 0) * idle + (moving ? 0.045 * Math.sin(moveProgress * Math.PI * 2) : 0);
     const scaleX = 1 + (profile.scaleX || 0) * idle + (moving ? 0.035 * moveLift : 0);
     const scaleY = 1 + (profile.scaleY || 0) * -idle - (moving ? 0.035 * moveLift : 0);
     const baseX = px + t * 0.5 + (options.offsetX || 0) * t;
-    const baseY = py + t * 0.92 + (options.offsetY || 0) * t + bob;
+    const baseY = py + t * 0.92 + footOffsetY * t + bob;
     softShadow(ctx, px, py + moveLift * t * 0.03, t, options.shadowAlpha ?? 0.42, options.shadowX || 0.36, options.shadowY || 0.13);
     if (options.glow !== false && profile.glow) {
       glow(ctx, px + t * 0.5, py + t * 0.46, t * (0.36 + blink * 0.18), profile.glow, (options.glowAlpha ?? 0.12) + blink * 0.05);
@@ -656,8 +686,9 @@ const Visuals = (() => {
   }
 
   function player(ctx, px, py, t, opts = {}) {
-    if (drawSprite(ctx, "player", px, py, t, {
-      scale: SPRITE_SCALE.player,
+    const spriteKey = opts.spriteKey || "player";
+    if (drawSprite(ctx, spriteKey, px, py, t, {
+      scale: SPRITE_SCALE[spriteKey] || SPRITE_SCALE.player,
       shadowAlpha: 0.50,
       shadowX: 0.32,
       shadowY: 0.12,
@@ -686,6 +717,20 @@ const Visuals = (() => {
 
   function npc(ctx, key, px, py, t, opts = {}) {
     const def = NPC_DEFS[key] || {};
+    const spriteKey = NPC_SPRITE_KEYS[key];
+    if (spriteKey && drawSprite(ctx, spriteKey, px, py, t, {
+      scale: (SPRITE_SCALE[spriteKey] || 1.8) * 0.94,
+      shadowAlpha: 0.38,
+      shadowX: 0.30,
+      shadowY: 0.11,
+      now: opts.now,
+      seed: opts.seed || key,
+      moving: opts.moving,
+      moveProgress: opts.moveProgress,
+      glowAlpha: 0.08
+    })) {
+      return;
+    }
     const now = opts.now || 0;
     const bob = FEATURES.spriteAnimation ? wave(now, 1700, key) * t * 0.025 : 0;
     py += bob;
@@ -1334,7 +1379,8 @@ function createRenderer(elements) {
     const pc = combatOffsetFor(game, "player", now);
     const ps = toScreen(pp.x + pc.x, pp.y + pc.y);
     const playerCombat = combatStateFor(game, "player", now);
-    Visuals.player(ctx, ps.px, ps.py, t, { now, seed: "player", moving: pp.moving, moveProgress: pp.moveProgress });
+    const playerSpriteKey = game.screen === "base" ? "player_town" : "player_dungeon";
+    Visuals.player(ctx, ps.px, ps.py, t, { now, seed: "player", moving: pp.moving, moveProgress: pp.moveProgress, spriteKey: playerSpriteKey });
     drawEntityCombatOverlay(ctx, ps.px, ps.py, t, playerCombat, true);
 
     if (Array.isArray(game.fx) && game.fx.length) {
