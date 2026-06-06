@@ -96,6 +96,85 @@ function createGameApp(elements) {
     // v10.0.0: 持ち帰り再利用・拠点強化ボーナスは無効。
   }
 
+  function clearOverlays() {
+    game.helpOpen = false;
+    game.tutorialOpen = false;
+    game.storyOpen = false;
+    game.endingOpen = false;
+    game.runRecordOpen = false;
+    game.runMenuOpen = false;
+    game.inventoryOpen = false;
+    game.npcDialog = null;
+  }
+
+  function enterDungeonFromSettlement() {
+    if (game.screen !== "base") return false;
+    clearOverlays();
+    resetRunState(true);
+    openRunScreen();
+    World.addLog(game, "廃棄層の入口をくぐった。内部構造が再構成される。 ");
+    MapSystem.generate(game);
+    game.settlement.bestDepth = Math.max(game.settlement.bestDepth, game.depth);
+    World.addLog(game, `区画生成完了。部屋数 ${game.rooms.length}。敵 ${game.enemies.length} 体を検出。`);
+    if (FEATURES.floorEvents) World.addLog(game, `フロアイベント: ${FLOOR_EVENT_DEFS[game.floorEvent]?.name || "通常稼働"}。`);
+    playSound("terminal");
+    render();
+    return true;
+  }
+
+  function baseInputBlocked() {
+    if (game.helpOpen || game.storyOpen || game.endingOpen || game.runRecordOpen || game.npcDialog || game.tutorialOpen || game.inventoryOpen || game.runMenuOpen) {
+      World.addLog(game, "画面を閉じてから集落を歩く。 ");
+      render();
+      return true;
+    }
+    return false;
+  }
+
+  function talkAdjacentNpc() {
+    if (game.screen !== "base") return false;
+    const npc = SettlementSystem.adjacentNpc(game);
+    if (!npc) {
+      const ent = game.settlementEntrance || { x: 43, y: 16 };
+      if (game.player.x === ent.x && game.player.y === ent.y) return enterDungeonFromSettlement();
+      World.addLog(game, "近くに話せる相手はいない。 ");
+      render();
+      return true;
+    }
+    game.npcDialog = npc.key;
+    World.recordCodex(game, `npc:${npc.key}`, NPC_DEFS[npc.key].name, NPC_DEFS[npc.key].role);
+    playSound("ui");
+    render();
+    return true;
+  }
+
+  function moveSettlementPlayer(dx, dy) {
+    if (baseInputBlocked()) return;
+    if (dx === 0 && dy === 0) return talkAdjacentNpc();
+    const nextX = game.player.x + dx;
+    const nextY = game.player.y + dy;
+    game.player.lastDir = { x: dx, y: dy };
+    if (!World.isWalkable(game, nextX, nextY)) {
+      World.addLog(game, "集落の壁や廃材に進路を阻まれた。 ");
+      render();
+      return;
+    }
+    const npc = World.getNpcAt(game, nextX, nextY);
+    if (npc) {
+      game.npcDialog = npc.key;
+      World.recordCodex(game, `npc:${npc.key}`, NPC_DEFS[npc.key].name, NPC_DEFS[npc.key].role);
+      playSound("ui");
+      render();
+      return;
+    }
+    game.player.x = nextX;
+    game.player.y = nextY;
+    playSound("move");
+    if (SettlementSystem.isEntrance(game, game.player.x, game.player.y)) return enterDungeonFromSettlement();
+    SettlementSystem.stepNpcs(game);
+    render();
+  }
+
   function rewardMissions() {
     if (!FEATURES.missions) return;
     for (const mission of Object.values(MISSION_DEFS)) {
@@ -144,8 +223,7 @@ function createGameApp(elements) {
     World.addLog(game, message);
     playSound("return");
     settleRunResult("return");
-    game.screen = "base";
-    VisibilitySystem.update(game);
+    SettlementSystem.generate(game);
     render();
   }
 
@@ -241,6 +319,7 @@ function createGameApp(elements) {
   }
 
   function movePlayer(dx, dy) {
+    if (game.screen === "base") return moveSettlementPlayer(dx, dy);
     if (dx === 0 && dy === 0) return waitTurn();
     if (!runInputAllowed()) return;
     if (game.isGameOver || game.isClear) return endMessage();
@@ -295,6 +374,7 @@ function createGameApp(elements) {
   }
 
   function contextPickupOrUse() {
+    if (game.screen === "base") return talkAdjacentNpc();
     if (!runInputAllowed()) return;
     if (game.isGameOver || game.isClear) return endMessage();
     if (World.getItemAt(game, game.player.x, game.player.y)) {
@@ -359,6 +439,11 @@ function createGameApp(elements) {
   }
 
   function regenerateArea() {
+    if (game.screen === "base") {
+      World.addLog(game, "集落は固定マップ。構造が変化するのは廃棄層の内部だけ。 ");
+      render();
+      return;
+    }
     if (!runInputAllowed()) return;
     if (game.isGameOver || game.isClear) return endMessage();
     MapSystem.generate(game);
@@ -418,14 +503,11 @@ function createGameApp(elements) {
     game.storyOpen = false;
     game.storyPage = 0;
     game.npcDialog = null;
-    MapSystem.generate(game);
-    game.settlement.bestDepth = Math.max(game.settlement.bestDepth, game.depth);
+    SettlementSystem.generate(game);
     World.recordCodex(game, "world:waste-zone", "再構成廃棄区域", "AIが作り、壊し、捨て続ける区域。人類はそこから文明の残骸を拾っている。 ");
-    World.recordCodex(game, "world:mission", "依頼", "発掘家は集落の依頼を受けて廃棄区域へ潜る。達成時は発掘記録に残る。 ");
-    World.recordCodex(game, "world:settlement", "集落", "水守り、老発掘家、修理屋、見張り、記録係がいる。拠点で1〜5を押すと会話できる。 ");
-    World.addLog(game, "外縁集落。住人に話してから発掘へ向かう。 ");
-    World.addLog(game, `区画生成完了。部屋数 ${game.rooms.length}。敵 ${game.enemies.length} 体を検出。`);
-    if (FEATURES.floorEvents) World.addLog(game, `フロアイベント: ${FLOOR_EVENT_DEFS[game.floorEvent]?.name || "通常稼働"}。`);
+    World.recordCodex(game, "world:mission", "発掘家の目的", "集落から廃棄層入口へ行き、再構成される内部で浄水コアを探す。 ");
+    World.recordCodex(game, "world:settlement", "外縁集落", "構造が固定された生活圏。水守り、老発掘家、修理屋、見張り、記録係が歩いている。 ");
+    World.addLog(game, "外縁集落。東の廃棄層入口へ向かう。住人にぶつかると会話できる。 ");
     render();
   }
 
@@ -460,23 +542,28 @@ function createGameApp(elements) {
       persistUiSettings();
       return render();
     }
+    if (game.screen === "base") {
+      const ent = game.settlementEntrance || { x: 43, y: 16 };
+      if (game.player.x === ent.x && game.player.y === ent.y) return enterDungeonFromSettlement();
+      World.addLog(game, "廃棄層へ入るには、集落東側の入口まで歩く。 ");
+      return render();
+    }
     if (game.screen !== "run") {
-      openRunScreen();
-      World.addLog(game, "探索を開始した。 ");
+      SettlementSystem.generate(game);
       return render();
     }
     render();
   }
 
   function openBaseScreen() {
-    if (game.helpOpen) game.helpOpen = false;
-    if (game.storyOpen) game.storyOpen = false;
-    if (game.endingOpen) game.endingOpen = false;
-    if (game.runRecordOpen) game.runRecordOpen = false;
-    if (game.runMenuOpen) game.runMenuOpen = false;
-    if (game.inventoryOpen) game.inventoryOpen = false;
-    if (game.npcDialog) game.npcDialog = null;
-    game.screen = game.screen === "base" ? (game.hasStarted ? "run" : "base") : "base";
+    if (game.screen === "run" && !game.isGameOver && !game.isClear && !game.resultSettled) {
+      World.addLog(game, "探索中に集落へ戻るならPで途中帰還する。Bでは戻れない。 ");
+      render();
+      return;
+    }
+    if (game.isGameOver || game.isClear || game.resultSettled) resetRunState(true);
+    clearOverlays();
+    SettlementSystem.generate(game);
     render();
   }
 
@@ -519,7 +606,7 @@ function createGameApp(elements) {
       game.tutorialSeen = true;
       persistUiSettings();
     } else if (game.screen === "base") {
-      game.screen = game.hasStarted ? "run" : "base";
+      // 固定集落はプレイ画面なので、Escでは画面遷移しない。
     }
     render();
   }
@@ -534,7 +621,7 @@ function createGameApp(elements) {
     game.inventoryOpen = false;
     game.endingOpen = false;
     game.runRecordOpen = false;
-    game.storyOpen = false;
+    game.storyOpen = true;
     game.storyPage = 0;
     render();
     return true;
@@ -648,7 +735,7 @@ function createGameApp(elements) {
   }
 
   function menuButton() {
-    // 探索中はメニュー開閉、タイトル/拠点では識別設定切替
+    // 探索中はメニュー開閉、集落/タイトルでは識別設定切替
     if (game.screen === "run") return toggleRunMenu();
     return cycleDifficulty();
   }
@@ -672,6 +759,7 @@ function createGameApp(elements) {
   }
 
   function useSelectedInventoryItem() {
+    if (game.screen === "base") return talkAdjacentNpc();
     if (game.screen !== "run") {
       upgradeBase();
       return true;
@@ -697,8 +785,8 @@ function createGameApp(elements) {
     game.npcDialog = null;
     game.runRecordOpen = false;
     game.helpOpen = false;
-    MapSystem.generate(game);
-    World.addLog(game, "保存データを初期化した。 ");
+    SettlementSystem.generate(game);
+    World.addLog(game, "保存データを初期化した。外縁集落へ戻った。 ");
     render();
   }
 

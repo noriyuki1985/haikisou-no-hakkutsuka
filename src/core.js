@@ -1,5 +1,5 @@
 // --- config.js ---
-const VERSION = "v17.4.2";
+const VERSION = "v17.4.3";
 const FEATURE_LEVEL = 1740;
 
 const FEATURES = {
@@ -61,7 +61,8 @@ const FEATURES = {
   mobileFirstV17: true,
   settlementStartV17: true,
   toastLogV17: true,
-  combatReadabilityV1742: true
+  combatReadabilityV1742: true,
+  settlementWalkMapV1743: true
 };
 
 const TILE = {
@@ -70,7 +71,8 @@ const TILE = {
   LIFT: ">",
   CORE: "*",
   TERMINAL: "T",
-  POLLUTION: "~"
+  POLLUTION: "~",
+  ENTRANCE: "E"
 };
 
 const CONFIG = {
@@ -123,7 +125,8 @@ const CONFIG = {
   bossMinionLimit: 3,
   floorEventChance: 0.85,
   bossTerminalCount: 3,
-  maxRecentFloorEvents: 6
+  maxRecentFloorEvents: 6,
+  settlementNpcStepChance: 0.55
 };
 
 
@@ -605,6 +608,7 @@ const GameState = (() => {
       rooms: [],
       logs: [],
       enemies: [],
+      npcs: [],
       items: [],
       traps: [],
       inventory: [],
@@ -619,6 +623,9 @@ const GameState = (() => {
       debug: createDebugState(),
       player: createPlayer(),
       lift: { x: 1, y: 1, active: true },
+      settlementEntrance: { x: 43, y: 16 },
+      settlementStart: { x: 8, y: 16 },
+      settlementTurn: 0,
       core: { x: 1, y: 1, active: false, acquired: false },
       terminals: [],
       disabledTerminals: 0,
@@ -715,7 +722,7 @@ const World = (() => {
   }
 
   function isWalkable(game, x, y) {
-    return [TILE.FLOOR, TILE.LIFT, TILE.CORE, TILE.TERMINAL, TILE.POLLUTION].includes(getTile(game, x, y));
+    return [TILE.FLOOR, TILE.LIFT, TILE.CORE, TILE.TERMINAL, TILE.POLLUTION, TILE.ENTRANCE].includes(getTile(game, x, y));
   }
 
   function isPlayerAt(game, x, y) {
@@ -742,12 +749,16 @@ const World = (() => {
     return game.items.find(item => item.x === x && item.y === y) || null;
   }
 
+  function getNpcAt(game, x, y) {
+    return Array.isArray(game.npcs) ? (game.npcs.find(npc => npc.x === x && npc.y === y) || null) : null;
+  }
+
   function getTrapAt(game, x, y) {
     return game.traps.find(trap => trap.x === x && trap.y === y && trap.active) || null;
   }
 
   function isBlockedByEntity(game, x, y) {
-    return isPlayerAt(game, x, y) || isLiftAt(game, x, y) || isCoreAt(game, x, y) || isTerminalAt(game, x, y) || Boolean(getEnemyAt(game, x, y));
+    return isPlayerAt(game, x, y) || isLiftAt(game, x, y) || isCoreAt(game, x, y) || isTerminalAt(game, x, y) || Boolean(getEnemyAt(game, x, y)) || Boolean(getNpcAt(game, x, y));
   }
 
   function isBlockedByEntityExceptEnemy(game, x, y, target) {
@@ -803,6 +814,7 @@ const World = (() => {
     isTerminalAt,
     getEnemyAt,
     getItemAt,
+    getNpcAt,
     getTrapAt,
     isBlockedByEntity,
     isBlockedByEntityExceptEnemy,
@@ -814,6 +826,153 @@ const World = (() => {
     nextId,
     pushFx
   };
+})();
+
+
+// --- settlement_map.js ---
+const SettlementSystem = (() => {
+  const START = { x: 8, y: 16 };
+  const ENTRANCE = { x: 43, y: 16 };
+
+  const NPC_STARTS = [
+    { key: "water_keeper", x: 10, y: 12, homeX: 10, homeY: 12, radius: 4 },
+    { key: "old_digger", x: 8, y: 21, homeX: 8, homeY: 21, radius: 4 },
+    { key: "mechanic", x: 22, y: 14, homeX: 22, homeY: 14, radius: 4 },
+    { key: "lookout", x: 35, y: 16, homeX: 35, homeY: 16, radius: 5 },
+    { key: "recorder", x: 16, y: 21, homeX: 16, homeY: 21, radius: 3 }
+  ];
+
+  function setTile(map, x, y, tile) {
+    if (x >= 0 && y >= 0 && x < CONFIG.mapWidth && y < CONFIG.mapHeight) map[y][x] = tile;
+  }
+
+  function fillRect(map, x, y, w, h, tile) {
+    for (let yy = y; yy < y + h; yy++) {
+      for (let xx = x; xx < x + w; xx++) setTile(map, xx, yy, tile);
+    }
+  }
+
+  function addBuilding(map, x, y, w, h, doorX, doorY) {
+    fillRect(map, x, y, w, h, TILE.WALL);
+    fillRect(map, x + 1, y + 1, w - 2, h - 2, TILE.FLOOR);
+    setTile(map, doorX, doorY, TILE.FLOOR);
+  }
+
+  function createMap() {
+    const map = GameState.createEmptyMap();
+    fillRect(map, 3, 4, 42, 24, TILE.FLOOR);
+    fillRect(map, 2, 3, 44, 1, TILE.WALL);
+    fillRect(map, 2, 28, 44, 1, TILE.WALL);
+    fillRect(map, 2, 3, 1, 26, TILE.WALL);
+    fillRect(map, 45, 3, 1, 26, TILE.WALL);
+
+    addBuilding(map, 6, 6, 10, 6, 11, 11);      // 水守り小屋
+    addBuilding(map, 18, 7, 10, 7, 22, 13);     // 修理屋
+    addBuilding(map, 13, 19, 9, 7, 16, 19);     // 記録小屋
+    addBuilding(map, 5, 18, 7, 5, 8, 18);       // 老発掘家の寝床
+
+    fillRect(map, 31, 5, 8, 3, TILE.WALL);
+    fillRect(map, 32, 6, 6, 1, TILE.FLOOR);
+    setTile(map, 35, 8, TILE.FLOOR);
+
+    fillRect(map, 34, 14, 10, 5, TILE.FLOOR);
+    fillRect(map, 34, 13, 10, 1, TILE.WALL);
+    fillRect(map, 34, 19, 10, 1, TILE.WALL);
+    setTile(map, 38, 13, TILE.FLOOR);
+    setTile(map, 38, 19, TILE.FLOOR);
+    setTile(map, ENTRANCE.x, ENTRANCE.y, TILE.ENTRANCE);
+
+    for (let x = 4; x <= 43; x += 2) setTile(map, x, 16, TILE.FLOOR);
+    for (let y = 5; y <= 27; y += 2) setTile(map, 24, y, TILE.FLOOR);
+
+    fillRect(map, 8, 13, 5, 2, TILE.POLLUTION); // 濁った貯水槽の仮表現
+    fillRect(map, 29, 22, 7, 2, TILE.WALL);
+    setTile(map, 32, 22, TILE.FLOOR);
+    setTile(map, 33, 22, TILE.FLOOR);
+    return map;
+  }
+
+  function revealAll(game) {
+    game.visible = GameState.createBoolMap(true);
+    game.explored = GameState.createBoolMap(true);
+    game.debug.visibleCount = CONFIG.mapWidth * CONFIG.mapHeight;
+  }
+
+  function generate(game) {
+    game.screen = "base";
+    game.depth = 0;
+    game.turn = 0;
+    game.map = createMap();
+    game.roomMap = GameState.createRoomMap();
+    game.rooms = [];
+    game.enemies = [];
+    game.items = [];
+    game.traps = [];
+    game.lure = null;
+    game.floorEvent = "normal";
+    game.currentRoomId = -1;
+    game.lift = { x: ENTRANCE.x, y: ENTRANCE.y, active: false };
+    game.core = { x: 1, y: 1, active: false, acquired: false };
+    game.terminals = [];
+    game.disabledTerminals = 0;
+    game.bossDefeated = false;
+    game.pendingExtract = false;
+    game.settlementStart = { ...START };
+    game.settlementEntrance = { ...ENTRANCE };
+    game.player.x = START.x;
+    game.player.y = START.y;
+    game.player.lastDir = { x: 1, y: 0 };
+    game.npcs = NPC_STARTS.map(n => ({
+      id: `npc:${n.key}`,
+      key: n.key,
+      x: n.x,
+      y: n.y,
+      homeX: n.homeX,
+      homeY: n.homeY,
+      radius: n.radius,
+      stepPhase: Math.random()
+    }));
+    revealAll(game);
+  }
+
+  function isEntrance(game, x, y) {
+    const ent = game.settlementEntrance || ENTRANCE;
+    return x === ent.x && y === ent.y;
+  }
+
+  function canNpcMove(game, npc, x, y) {
+    if (!World.isWalkable(game, x, y)) return false;
+    if (isEntrance(game, x, y)) return false;
+    if (game.player.x === x && game.player.y === y) return false;
+    if (Array.isArray(game.npcs) && game.npcs.some(other => other !== npc && other.x === x && other.y === y)) return false;
+    if (chebyshev(x, y, npc.homeX, npc.homeY) > npc.radius) return false;
+    return true;
+  }
+
+  function stepNpcs(game) {
+    if (!Array.isArray(game.npcs)) return;
+    game.settlementTurn = (game.settlementTurn || 0) + 1;
+    for (const npc of game.npcs) {
+      if (Math.random() > CONFIG.settlementNpcStepChance) continue;
+      const dirs = shuffle([{ x: 0, y: 0 }, ...World.DIRS4]);
+      for (const dir of dirs) {
+        const nx = npc.x + dir.x;
+        const ny = npc.y + dir.y;
+        if (!canNpcMove(game, npc, nx, ny)) continue;
+        npc.x = nx;
+        npc.y = ny;
+        break;
+      }
+    }
+    revealAll(game);
+  }
+
+  function adjacentNpc(game) {
+    if (!Array.isArray(game.npcs)) return null;
+    return game.npcs.find(npc => chebyshev(game.player.x, game.player.y, npc.x, npc.y) <= 1) || null;
+  }
+
+  return { generate, revealAll, stepNpcs, adjacentNpc, isEntrance };
 })();
 
 

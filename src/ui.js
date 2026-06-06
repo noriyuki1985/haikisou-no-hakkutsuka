@@ -495,6 +495,15 @@ const Visuals = (() => {
     if (drawTileSprite(ctx, tileKey, px, py, t, visible)) return;
     if (kind === TILE.WALL) return drawWallBlock(ctx, px, py, t, visible);
     if (kind === TILE.LIFT) return drawLift(ctx, px, py, t, visible);
+    if (kind === TILE.ENTRANCE) {
+      drawFloorPanel(ctx, px, py, t, visible, visible ? "#161313" : "#080606");
+      if (visible) {
+        glow(ctx, px + t * 0.52, py + t * 0.48, t * 0.58, "rgba(255,125,65,1)", 0.20);
+        poly(ctx, [[px+t*.22,py+t*.73],[px+t*.50,py+t*.20],[px+t*.78,py+t*.73]], "rgba(30,15,10,0.92)", "#e07a42");
+        rect(ctx, px+t*.39, py+t*.46, t*.22, t*.25, "#08090a", "rgba(255,210,140,0.55)");
+      }
+      return;
+    }
     if (kind === TILE.CORE) return drawCore(ctx, px, py, t, visible);
     if (kind === TILE.TERMINAL) return drawTerminal(ctx, px, py, t, visible);
     if (kind === TILE.POLLUTION) {
@@ -673,6 +682,37 @@ const Visuals = (() => {
     line(ctx, px+t*.58, py+t*.74, px+t*.64, py+t*.89, "#8b8b8b", 2);
     rect(ctx, px+t*.45, py+t*.28, t*.04, t*.04, "#111");
     rect(ctx, px+t*.54, py+t*.28, t*.04, t*.04, "#111");
+  }
+
+  function npc(ctx, key, px, py, t, opts = {}) {
+    const def = NPC_DEFS[key] || {};
+    const now = opts.now || 0;
+    const bob = FEATURES.spriteAnimation ? wave(now, 1700, key) * t * 0.025 : 0;
+    py += bob;
+    softShadow(ctx, px, py, t, 0.34, 0.27, 0.10);
+    const palette = {
+      water_keeper: ["#375c64", "#8fd8e8", "水"],
+      old_digger: ["#5a4b36", "#d0b47a", "老"],
+      mechanic: ["#4c3f30", "#e2a84d", "修"],
+      lookout: ["#343f4c", "#9ec8ff", "見"],
+      recorder: ["#3d3650", "#c7b6ff", "記"]
+    };
+    const [body, accent, glyphText] = palette[key] || ["#444", "#ddd", "人"];
+    poly(ctx, [[px+t*.34,py+t*.40],[px+t*.51,py+t*.26],[px+t*.67,py+t*.43],[px+t*.57,py+t*.72],[px+t*.31,py+t*.65]], body, "rgba(255,255,255,0.12)");
+    ellipse(ctx, px+t*.50, py+t*.30, t*.12, t*.11, "#d8c1a0", "rgba(255,255,255,0.40)");
+    rect(ctx, px+t*.41, py+t*.48, t*.18, t*.13, accent, "rgba(255,255,255,0.18)");
+    line(ctx, px+t*.39, py+t*.70, px+t*.34, py+t*.86, "#7b6a55", 2);
+    line(ctx, px+t*.56, py+t*.70, px+t*.62, py+t*.86, "#7b6a55", 2);
+    ctx.save();
+    ctx.globalAlpha = 0.88;
+    ctx.fillStyle = "rgba(0,0,0,0.62)";
+    ctx.fillRect(px + t*.16, py + t*.02, t*.68, t*.20);
+    ctx.fillStyle = accent;
+    ctx.font = `${Math.floor(t*.12)}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(def.name || glyphText, px + t*.50, py + t*.12);
+    ctx.restore();
   }
 
   function trap(ctx, px, py, t, visible) {
@@ -880,7 +920,7 @@ const Visuals = (() => {
     drawDamagePopup(ctx, cx, cy, t, progress, opts.damage, type);
   }
 
-  return { glyph, tile, item, enemy, player, trap, fx, assetStatus, getAsset, drawAssetBackground };
+  return { glyph, tile, item, enemy, npc, player, trap, fx, assetStatus, getAsset, drawAssetBackground };
 })();
 
 
@@ -963,6 +1003,7 @@ function createRenderer(elements) {
   function entityList(game) {
     const list = [{ id: "player", x: game.player.x, y: game.player.y }];
     for (const e of game.enemies) list.push({ id: e.id, x: e.x, y: e.y });
+    for (const npc of (game.npcs || [])) list.push({ id: npc.id, x: npc.x, y: npc.y });
     for (const it of game.items) {
       if (!it.id) it.id = `item-${++itemSeq}`;
       list.push({ id: it.id, x: it.x, y: it.y });
@@ -1272,6 +1313,13 @@ function createRenderer(elements) {
       Visuals.glyph(ctx, "o", s.px, s.py, t, "#ffe580", 0.6);
     }
 
+    for (const npc of (game.npcs || [])) {
+      if (!game.visible[npc.y]?.[npc.x]) continue;
+      const d = dispOf(npc.id, npc.x, npc.y);
+      const s = toScreen(d.x, d.y);
+      Visuals.npc(ctx, npc.key, s.px, s.py, t, { now, seed: npc.id, moving: d.moving, moveProgress: d.moveProgress });
+    }
+
     for (const enemy of game.enemies) {
       if (!game.visible[enemy.y]?.[enemy.x]) continue;
       const d = dispOf(enemy.id, enemy.x, enemy.y);
@@ -1374,6 +1422,15 @@ function createRenderer(elements) {
   function renderStatus(game) {
     if (versionText) versionText.textContent = `Version: ${VERSION}`;
     const state = game.isClear ? " / CLEAR" : game.isGameOver ? " / GAME OVER" : game.isReturned ? " / RETURNED" : "";
+    if (game.screen === "base") {
+      const ent = game.settlementEntrance || { x: 43, y: 16 };
+      const atEntrance = game.player.x === ent.x && game.player.y === ent.y;
+      statusText.textContent = atEntrance
+        ? "外縁集落｜廃棄層入口：このまま進むと発掘を開始"
+        : "外縁集落｜住人にぶつかると会話｜東の廃棄層入口へ向かう";
+      if (debugText) debugText.textContent = `debug: ${view.mode} ${view.cols}x${view.rows} dpr${view.dpr} / settlement turn ${game.settlementTurn || 0} / npc ${(game.npcs || []).length} / fx ${Array.isArray(game.fx) ? game.fx.length : 0}`;
+      return;
+    }
     const weapon = game.player.weapon ? ITEM_DEFS[game.player.weapon.kind]?.name : "素手工具";
     const armor = game.player.armor ? ITEM_DEFS[game.player.armor.kind]?.name : "作業服";
     const floorEvent = FLOOR_EVENT_DEFS[game.floorEvent]?.name || "通常稼働";
@@ -1405,7 +1462,7 @@ function createRenderer(elements) {
         const visible = Boolean(game.visible[y]?.[x]);
         const tile = game.map[y][x];
         if (tile === TILE.WALL) miniCtx.fillStyle = visible ? "#777" : "#333";
-        else if (tile === TILE.LIFT || tile === TILE.CORE) miniCtx.fillStyle = visible ? "#e6c34a" : "#5e4a10";
+        else if (tile === TILE.LIFT || tile === TILE.CORE || tile === TILE.ENTRANCE) miniCtx.fillStyle = visible ? "#e6c34a" : "#5e4a10";
         else if (tile === TILE.TERMINAL) miniCtx.fillStyle = visible ? "#aaaaff" : "#42426b";
         else if (tile === TILE.POLLUTION) miniCtx.fillStyle = visible ? "#4fb34f" : "#1e4d1e";
         else miniCtx.fillStyle = visible ? "#bfbfbf" : "#555";
@@ -1442,8 +1499,16 @@ function createRenderer(elements) {
   function renderBase(game) {
     clearNode(basePanel);
     const h = document.createElement("h2");
-    h.textContent = "探索情報";
+    h.textContent = game.screen === "base" ? "外縁集落" : "探索情報";
     basePanel.appendChild(h);
+    if (game.screen === "base") {
+      appendLine(basePanel, "固定マップ。住人は歩き回る。", "selected-line");
+      appendLine(basePanel, "東側の赤い入口へ行くと、再構成される廃棄層に入る。");
+      appendLine(basePanel, `浄水コア ${game.settlement.cores} / 発掘 ${game.settlement.runs} / 最深 ${game.settlement.bestDepth}`);
+      appendLine(basePanel, "会話: 住人にぶつかる / 1〜5", "muted-line");
+      appendLine(basePanel, "設定: M / ヘルプ: H / 記録: L", "muted-line");
+      return;
+    }
     const floorEvent = FLOOR_EVENT_DEFS[game.floorEvent]?.name || "通常稼働";
     appendLine(basePanel, `全域: ${floorEvent}`, "selected-line");
     appendLine(basePanel, game.depth >= CONFIG.maxDepth ? `端末 ${game.disabledTerminals || 0}/${game.terminals?.length || 0}` : `深度 ${game.depth}/${CONFIG.maxDepth}`);
@@ -1498,7 +1563,7 @@ function createRenderer(elements) {
     screenPanel.className = "screen-panel";
     const asset = Visuals.assetStatus ? Visuals.assetStatus() : { ready: true, total: 0, loaded: 0, failed: 0, done: 0, ratio: 1, failedKeys: [] };
     const ended = game.screen === "run" && (game.isGameOver || game.isClear);
-    const active = !asset.ready || game.helpOpen || game.tutorialOpen || game.storyOpen || game.endingOpen || game.runRecordOpen || game.runMenuOpen || game.inventoryOpen || game.npcDialog || ended || game.screen === "title" || game.screen === "base";
+    const active = !asset.ready || game.helpOpen || game.tutorialOpen || game.storyOpen || game.endingOpen || game.runRecordOpen || game.runMenuOpen || game.inventoryOpen || game.npcDialog || ended || game.screen === "title";
     screenPanel.hidden = !active;
     if (!active) return;
 
@@ -1696,10 +1761,11 @@ function createRenderer(elements) {
   function toggleControlsState(game) {
     if (!controls) return;
     const overlay = game.helpOpen || game.tutorialOpen || game.storyOpen || game.endingOpen || game.runRecordOpen || game.runMenuOpen || game.inventoryOpen || game.npcDialog;
-    const playable = game.screen === "run" && !overlay && !game.isGameOver && !game.isClear;
+    const playable = (game.screen === "run" || game.screen === "base") && !overlay && !game.isGameOver && !game.isClear;
     controls.classList.toggle("controls-dim", !playable);
     if (actionPickupLabel) {
-      actionPickupLabel.textContent = lastGame && World.getItemAt(game, game.player.x, game.player.y) ? "拾う" : "使う";
+      if (game.screen === "base") actionPickupLabel.textContent = "話す";
+      else actionPickupLabel.textContent = lastGame && World.getItemAt(game, game.player.x, game.player.y) ? "拾う" : "使う";
     }
   }
 
