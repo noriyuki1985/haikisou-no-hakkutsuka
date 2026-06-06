@@ -698,51 +698,186 @@ const Visuals = (() => {
     return true;
   }
 
-  function fx(ctx, type, cx, cy, t, progress) {
-    const alpha = Math.max(0, 1 - progress);
-    if (type === "hit" && drawFxSprite(ctx, "slash", cx, cy, t, progress, 1.55, -0.35)) return;
-    if ((type === "shoot" || type === "laser") && drawFxSprite(ctx, "laser", cx, cy, t, progress, 2.05, -0.18)) return;
-    if (type === "terminal" && drawFxSprite(ctx, "terminal", cx, cy, t, progress, 1.85, 0)) return;
-    if ((type === "defeat" || type === "spark") && drawFxSprite(ctx, "spark", cx, cy, t, progress, 1.75, 0)) return;
-    if (type === "pollution" && drawFxSprite(ctx, "pollution", cx, cy, t, progress, 1.65, 0)) return;
+  function drawDamagePopup(ctx, cx, cy, t, progress, damage, type) {
+    if (!damage) return;
+    const pop = Math.sin(Math.min(1, progress * 2.2) * Math.PI);
+    const up = t * (0.18 + progress * 0.86);
+    const drift = (type === "hurt" || type === "shoot" || type === "laser") ? -t * 0.10 : t * 0.10;
+    const alpha = Math.max(0, 1 - progress * 1.08);
     ctx.save();
     ctx.globalAlpha = alpha;
+    ctx.font = `bold ${Math.max(14, Math.floor(t * (0.46 + pop * 0.16)))}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.lineWidth = Math.max(4, t * 0.12);
+    ctx.strokeStyle = "rgba(0,0,0,0.86)";
+    ctx.fillStyle = type === "hurt" || type === "shoot" || type === "laser" ? "#ff6f5f" : "#ffe66d";
+    ctx.strokeText(`-${damage}`, cx + drift * progress, cy - up);
+    ctx.fillText(`-${damage}`, cx + drift * progress, cy - up);
+    ctx.restore();
+  }
+
+  function actionVector(cx, cy, from) {
+    if (!from) return { angle: -0.35, ux: 1, uy: 0, len: 1 };
+    const dx = cx - from.px;
+    const dy = cy - from.py;
+    const len = Math.max(1, Math.hypot(dx, dy));
+    return { angle: Math.atan2(dy, dx), ux: dx / len, uy: dy / len, len };
+  }
+
+  function drawCombatOrigin(ctx, type, cx, cy, t, progress, from) {
+    if (!from || progress > 0.42) return;
+    const v = actionVector(cx, cy, from);
+    const alpha = Math.max(0, 1 - progress / 0.42);
+    const sx = from.px;
+    const sy = from.py;
+    ctx.save();
     ctx.globalCompositeOperation = "lighter";
-    if (type === "hit") {
-      for (let i = 0; i < 3; i++) {
-        const off = (i - 1) * t * 0.08;
-        line(ctx, cx - t * 0.42, cy + t * 0.25 + off, cx + t * 0.42, cy - t * 0.25 + off, i === 1 ? "#ffffff" : "#82e8ff", i === 1 ? 3 : 1.5);
-      }
-    } else if (type === "hurt") {
-      ctx.strokeStyle = "#ff6b6b";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(cx, cy, t * (0.18 + 0.55 * progress), 0, Math.PI * 2);
-      ctx.stroke();
-      glow(ctx, cx, cy, t * 0.5, "rgba(255,70,70,1)", 0.12 * alpha);
-    } else if (type === "defeat") {
-      for (let i = 0; i < 10; i++) {
-        const a = (Math.PI * 2 * i) / 10 + progress;
-        line(ctx, cx, cy, cx + Math.cos(a) * t * (0.18 + progress * 0.52), cy + Math.sin(a) * t * (0.18 + progress * 0.52), i % 2 ? "#ffb347" : "#fff0a0", 2);
-      }
-    } else if (type === "terminal") {
-      ctx.strokeStyle = "#8ce9ff";
-      ctx.lineWidth = 2;
-      for (let i = 0; i < 3; i++) {
-        ctx.beginPath();
-        ctx.arc(cx, cy, t * (0.20 + progress * 0.45 + i * 0.12), 0, Math.PI * 2);
-        ctx.stroke();
-      }
-    } else if (type === "pollution") {
-      glow(ctx, cx, cy, t * (0.4 + progress * 0.5), "rgba(70,230,100,1)", 0.22 * alpha);
+    ctx.globalAlpha = alpha;
+    glow(ctx, sx, sy, t * (0.22 + progress * 0.40), type === "hit" ? "rgba(120,220,255,1)" : "rgba(255,130,90,1)", 0.16 * alpha);
+    ctx.translate(sx, sy);
+    ctx.rotate(v.angle);
+    ctx.strokeStyle = type === "hit" ? "rgba(190,245,255,0.88)" : "rgba(255,170,100,0.82)";
+    ctx.lineWidth = Math.max(2, t * 0.08);
+    ctx.beginPath();
+    ctx.arc(t * 0.10, 0, t * (0.18 + progress * 0.30), -0.78, 0.78);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawImpactMarker(ctx, type, cx, cy, t, progress, from) {
+    const hit = Math.sin(Math.min(1, progress * 2.0) * Math.PI);
+    const alpha = Math.max(0, 0.78 - progress * 0.82);
+    const v = actionVector(cx, cy, from);
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = alpha;
+    glow(ctx, cx, cy, t * (0.28 + hit * 0.42), type === "hit" || type === "throw" ? "rgba(255,235,130,1)" : "rgba(255,80,50,1)", 0.20 * alpha);
+    ctx.translate(cx, cy);
+    ctx.rotate(v.angle);
+    ctx.strokeStyle = type === "hurt" || type === "shoot" || type === "laser" ? "rgba(255,95,70,0.92)" : "rgba(255,245,180,0.92)";
+    ctx.lineWidth = Math.max(2, t * 0.075);
+    ctx.beginPath();
+    ctx.arc(0, 0, t * (0.25 + progress * 0.35), -1.0, 1.0);
+    ctx.stroke();
+    line(ctx, -t * 0.18, -t * 0.18, t * 0.18, t * 0.18, ctx.strokeStyle, Math.max(2, t * 0.055));
+    line(ctx, -t * 0.18, t * 0.18, t * 0.18, -t * 0.18, ctx.strokeStyle, Math.max(2, t * 0.055));
+    ctx.restore();
+  }
+
+  function drawActionTrail(ctx, type, cx, cy, t, progress, from) {
+    if (!from) return;
+    const alpha = Math.max(0, 1 - progress * 1.18);
+    const sx = from.px;
+    const sy = from.py;
+    const dx = cx - sx;
+    const dy = cy - sy;
+    const lead = clamp(progress * 1.65, 0, 1);
+    const tail = clamp(lead - (type === "laser" ? 0.70 : 0.42), 0, 1);
+    const x1 = sx + dx * tail;
+    const y1 = sy + dy * tail;
+    const x2 = sx + dx * lead;
+    const y2 = sy + dy * lead;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = alpha;
+    if (type === "shoot" || type === "laser") {
+      const color = type === "laser" ? "rgba(255,70,38,0.95)" : "rgba(255,190,95,0.86)";
+      line(ctx, x1, y1, x2, y2, type === "laser" ? "rgba(255,40,20,0.22)" : "rgba(255,170,70,0.20)", type === "laser" ? 10 : 7);
+      line(ctx, x1, y1, x2, y2, color, type === "laser" ? 4.5 : 2.8);
+      line(ctx, x1, y1, x2, y2, "rgba(255,255,220,0.86)", type === "laser" ? 1.5 : 1);
+      glow(ctx, x2, y2, t * 0.42, type === "laser" ? "rgba(255,70,40,1)" : "rgba(255,210,120,1)", 0.18 * alpha);
+    } else if (type === "throw") {
+      line(ctx, x1, y1, x2, y2, "rgba(120,200,255,0.20)", 6);
+      line(ctx, x1, y1, x2, y2, "rgba(220,245,255,0.82)", 2);
+      ellipse(ctx, x2, y2, t * 0.12, t * 0.08, "rgba(240,250,255,0.92)");
     } else {
-      ctx.strokeStyle = "#ffe580";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(cx, cy, t * (0.22 + 0.5 * progress), 0, Math.PI * 2);
-      ctx.stroke();
+      line(ctx, x1, y1, x2, y2, type === "hurt" ? "rgba(255,80,60,0.20)" : "rgba(100,220,255,0.20)", 8);
+      line(ctx, x1, y1, x2, y2, type === "hurt" ? "rgba(255,90,70,0.88)" : "rgba(170,240,255,0.92)", 3.5);
+      line(ctx, x1, y1, x2, y2, "rgba(255,255,255,0.72)", 1.2);
     }
     ctx.restore();
+  }
+
+  function fx(ctx, type, cx, cy, t, progress, opts = {}) {
+    const alpha = Math.max(0, 1 - progress);
+    const actionFx = ["hit", "hurt", "throw", "shoot", "laser"].includes(type);
+    const v = actionVector(cx, cy, opts.from);
+    if (actionFx) {
+      drawCombatOrigin(ctx, type, cx, cy, t, progress, opts.from);
+      drawActionTrail(ctx, type, cx, cy, t, progress, opts.from);
+      drawImpactMarker(ctx, type, cx, cy, t, progress, opts.from);
+    }
+
+    let spriteDrawn = false;
+    if (type === "hit") spriteDrawn = drawFxSprite(ctx, "slash", cx, cy, t, progress, 1.95, v.angle + 0.45);
+    else if (type === "throw") spriteDrawn = drawFxSprite(ctx, "spark", cx, cy, t, progress, 1.20, v.angle);
+    else if (type === "shoot" || type === "laser") spriteDrawn = drawFxSprite(ctx, "laser", cx, cy, t, progress, type === "laser" ? 2.45 : 1.75, v.angle);
+    else if (type === "terminal") spriteDrawn = drawFxSprite(ctx, "terminal", cx, cy, t, progress, 1.85, 0);
+    else if (type === "defeat" || type === "spark") spriteDrawn = drawFxSprite(ctx, "spark", cx, cy, t, progress, 1.75, 0);
+    else if (type === "pollution") spriteDrawn = drawFxSprite(ctx, "pollution", cx, cy, t, progress, 1.65, 0);
+
+    if (!spriteDrawn) {
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.globalCompositeOperation = "lighter";
+      if (type === "hit") {
+        for (let i = 0; i < 3; i++) {
+          const off = (i - 1) * t * 0.08;
+          line(ctx, cx - t * 0.48, cy + t * 0.28 + off, cx + t * 0.48, cy - t * 0.28 + off, i === 1 ? "#ffffff" : "#82e8ff", i === 1 ? 3.5 : 1.8);
+        }
+      } else if (type === "hurt") {
+        ctx.strokeStyle = "#ff6b6b";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(cx, cy, t * (0.18 + 0.55 * progress), 0, Math.PI * 2);
+        ctx.stroke();
+        glow(ctx, cx, cy, t * 0.5, "rgba(255,70,70,1)", 0.12 * alpha);
+      } else if (type === "defeat") {
+        for (let i = 0; i < 10; i++) {
+          const a = (Math.PI * 2 * i) / 10 + progress;
+          line(ctx, cx, cy, cx + Math.cos(a) * t * (0.18 + progress * 0.52), cy + Math.sin(a) * t * (0.18 + progress * 0.52), i % 2 ? "#ffb347" : "#fff0a0", 2);
+        }
+      } else if (type === "terminal") {
+        ctx.strokeStyle = "#8ce9ff";
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 3; i++) {
+          ctx.beginPath();
+          ctx.arc(cx, cy, t * (0.20 + progress * 0.45 + i * 0.12), 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      } else if (type === "pollution") {
+        glow(ctx, cx, cy, t * (0.4 + progress * 0.5), "rgba(70,230,100,1)", 0.22 * alpha);
+      } else if (type === "alert") {
+        glow(ctx, cx, cy - t * 0.10, t * (0.38 + progress * 0.42), "rgba(255,75,55,1)", 0.18 * alpha);
+        ctx.strokeStyle = "rgba(255,95,70,0.90)";
+        ctx.lineWidth = Math.max(2, t * 0.07);
+        ctx.beginPath();
+        ctx.arc(cx, cy - t * 0.10, t * (0.26 + progress * 0.32), -Math.PI * 0.20, Math.PI * 1.20);
+        ctx.stroke();
+        ctx.fillStyle = "rgba(255,235,190,0.92)";
+        ctx.font = `bold ${Math.max(14, Math.floor(t * 0.58))}px sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("!", cx, cy - t * (0.26 + progress * 0.24));
+      } else {
+        ctx.strokeStyle = "#ffe580";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(cx, cy, t * (0.22 + 0.5 * progress), 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    if (type === "hurt") {
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, 0.20 - progress * 0.18);
+      ctx.fillStyle = "#ff2d20";
+      ctx.fillRect(cx - t * 0.52, cy - t * 0.52, t * 1.04, t * 1.04);
+      ctx.restore();
+    }
+    drawDamagePopup(ctx, cx, cy, t, progress, opts.damage, type);
   }
 
   return { glyph, tile, item, enemy, player, trap, fx, assetStatus, getAsset, drawAssetBackground };
@@ -877,6 +1012,142 @@ function createRenderer(elements) {
     }
   }
 
+  function combatProgress(now, fx) {
+    return clamp((now - fx.born) / Math.max(1, CONFIG.combatAnimMs || 260), 0, 1);
+  }
+
+  function combatOffsetFor(game, id, now) {
+    if (!Array.isArray(game.fx)) return { x: 0, y: 0 };
+    let ox = 0;
+    let oy = 0;
+    for (const f of game.fx) {
+      if (!f || !["hit", "hurt", "throw", "shoot", "laser"].includes(f.type)) continue;
+      if (typeof f.fromX !== "number" || typeof f.fromY !== "number") continue;
+      const p = combatProgress(now, f);
+      if (p >= 1) continue;
+      const dx = (f.x ?? f.fromX) - f.fromX;
+      const dy = (f.y ?? f.fromY) - f.fromY;
+      const len = Math.max(1, Math.hypot(dx, dy));
+      const ux = dx / len;
+      const uy = dy / len;
+      const windup = Math.sin(clamp(p / 0.42, 0, 1) * Math.PI);
+      const returnEase = Math.sin(p * Math.PI);
+      if (f.actorId === id && (f.type === "hit" || f.type === "hurt")) {
+        ox += ux * (0.10 * windup + 0.34 * returnEase);
+        oy += uy * (0.10 * windup + 0.34 * returnEase);
+      }
+      if (f.actorId === id && f.type === "throw") {
+        ox += ux * returnEase * 0.14;
+        oy += uy * returnEase * 0.14;
+      }
+      if (f.actorId === id && (f.type === "shoot" || f.type === "laser")) {
+        ox -= ux * returnEase * (f.type === "laser" ? 0.18 : 0.11);
+        oy -= uy * returnEase * (f.type === "laser" ? 0.18 : 0.11);
+      }
+      if (f.targetId === id) {
+        const recoil = Math.sin(clamp(p / 0.58, 0, 1) * Math.PI) * Math.max(0, 1 - p * 0.35);
+        const shake = Math.sin(p * Math.PI * 14) * Math.max(0, 1 - p) * 0.08;
+        const power = f.type === "laser" ? 0.30 : f.type === "shoot" ? 0.24 : 0.20;
+        ox += ux * recoil * power + ux * shake;
+        oy += uy * recoil * power + uy * shake;
+      }
+    }
+    return { x: ox, y: oy };
+  }
+
+  function screenShakeFor(game, now) {
+    if (!Array.isArray(game.fx)) return { x: 0, y: 0 };
+    let power = 0;
+    for (const f of game.fx) {
+      if (!f || !["hit", "hurt", "defeat", "shoot", "laser"].includes(f.type)) continue;
+      const p = combatProgress(now, f);
+      if (p >= 1) continue;
+      const weight = f.type === "laser" ? 1.25 : f.type === "defeat" ? 1.0 : 0.65;
+      power = Math.max(power, (1 - p) * weight);
+    }
+    if (power <= 0) return { x: 0, y: 0 };
+    const amp = (CONFIG.screenShakePx || 0) * power;
+    return { x: Math.sin(now * 0.071) * amp, y: Math.cos(now * 0.083) * amp };
+  }
+
+  function combatStateFor(game, id, now) {
+    const state = { actor: false, target: false, targetProgress: 1, actorProgress: 1, type: null, damage: 0, showHp: false, hpAlpha: 0 };
+    if (!Array.isArray(game.fx)) return state;
+    for (const f of game.fx) {
+      if (!f || !["hit", "hurt", "throw", "shoot", "laser"].includes(f.type)) continue;
+      const p = combatProgress(now, f);
+      if (p >= 1) continue;
+      const fade = Math.max(0, 1 - p);
+      if (f.actorId === id) {
+        state.actor = true;
+        state.actorProgress = Math.min(state.actorProgress, p);
+      }
+      if (f.targetId === id) {
+        state.target = true;
+        state.targetProgress = Math.min(state.targetProgress, p);
+        state.type = f.type;
+        state.damage = Math.max(state.damage, f.damage || 0);
+        state.showHp = true;
+        state.hpAlpha = Math.max(state.hpAlpha, fade);
+      }
+    }
+    return state;
+  }
+
+  function drawEntityCombatOverlay(ctx, px, py, t, state, isPlayer = false) {
+    if (!state || (!state.actor && !state.target)) return;
+    const cx = px + t * 0.5;
+    const cy = py + t * (isPlayer ? 0.48 : 0.46);
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    if (state.actor) {
+      const p = clamp(state.actorProgress, 0, 1);
+      const alpha = Math.max(0, 0.42 - p * 0.50);
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = isPlayer ? "rgba(150,235,255,0.90)" : "rgba(255,155,95,0.85)";
+      ctx.lineWidth = Math.max(2, t * 0.055);
+      ctx.beginPath();
+      ctx.arc(cx, py + t * 0.66, t * (0.30 + p * 0.22), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    if (state.target) {
+      const p = clamp(state.targetProgress, 0, 1);
+      const flash = Math.max(0, 0.56 - p * 0.70);
+      ctx.globalAlpha = flash;
+      ctx.fillStyle = state.type === "laser" || state.type === "shoot" || state.type === "hurt" ? "rgba(255,55,40,0.95)" : "rgba(255,245,180,0.95)";
+      ctx.fillRect(px + t * 0.16, py + t * 0.12, t * 0.68, t * 0.76);
+      ctx.globalAlpha = Math.max(0, 0.52 - p * 0.54);
+      ctx.strokeStyle = "rgba(255,255,255,0.92)";
+      ctx.lineWidth = Math.max(2, t * 0.06);
+      ctx.beginPath();
+      ctx.arc(cx, cy, t * (0.30 + p * 0.36), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawEnemyHpChip(ctx, px, py, t, enemy, state) {
+    if (!enemy || !state?.showHp || !enemy.maxHp) return;
+    const alpha = clamp(0.28 + state.hpAlpha, 0, 1);
+    const w = t * 0.78;
+    const h = Math.max(4, t * 0.09);
+    const x = px + (t - w) / 2;
+    const y = py + t * 0.04;
+    const ratio = clamp(enemy.hp / enemy.maxHp, 0, 1);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = "rgba(0,0,0,0.74)";
+    ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+    ctx.fillStyle = "rgba(80,80,80,0.80)";
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = ratio <= 0.3 ? "rgba(255,84,68,0.95)" : "rgba(255,205,88,0.95)";
+    ctx.fillRect(x, y, w * ratio, h);
+    ctx.strokeStyle = "rgba(255,255,255,0.28)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x, y, w, h);
+    ctx.restore();
+  }
+
   // ---- 世界の描画（毎フレーム） ----
 
   function drawFloorEventOverlay(game, width, height, now) {
@@ -948,6 +1219,8 @@ function createRenderer(elements) {
 
     ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
     ctx.clearRect(0, 0, cols * t, rows * t);
+    const shake = screenShakeFor(game, now);
+    if (shake.x || shake.y) ctx.translate(shake.x, shake.y);
     Visuals.drawAssetBackground(ctx, game.screen === "base" ? "base" : "title", 0, 0, cols * t, rows * t, "#05070b", "#020203");
     ctx.fillStyle = "rgba(0,0,0,0.45)";
     ctx.fillRect(0, 0, cols * t, rows * t);
@@ -1002,12 +1275,19 @@ function createRenderer(elements) {
     for (const enemy of game.enemies) {
       if (!game.visible[enemy.y]?.[enemy.x]) continue;
       const d = dispOf(enemy.id, enemy.x, enemy.y);
-      const s = toScreen(d.x, d.y);
+      const c = combatOffsetFor(game, enemy.id, now);
+      const s = toScreen(d.x + c.x, d.y + c.y);
+      const cs = combatStateFor(game, enemy.id, now);
       Visuals.enemy(ctx, enemy.type, s.px, s.py, t, { stun: enemy.stun > 0, now, seed: enemy.id, state: enemy.state, moving: d.moving, moveProgress: d.moveProgress });
+      drawEntityCombatOverlay(ctx, s.px, s.py, t, cs, false);
+      drawEnemyHpChip(ctx, s.px, s.py, t, enemy, cs);
     }
 
-    const ps = toScreen(pp.x, pp.y);
+    const pc = combatOffsetFor(game, "player", now);
+    const ps = toScreen(pp.x + pc.x, pp.y + pc.y);
+    const playerCombat = combatStateFor(game, "player", now);
     Visuals.player(ctx, ps.px, ps.py, t, { now, seed: "player", moving: pp.moving, moveProgress: pp.moveProgress });
+    drawEntityCombatOverlay(ctx, ps.px, ps.py, t, playerCombat, true);
 
     if (Array.isArray(game.fx) && game.fx.length) {
       const keep = [];
@@ -1016,7 +1296,8 @@ function createRenderer(elements) {
         if (prog >= 1) continue;
         keep.push(f);
         const s = toScreen(f.x + 0.5, f.y + 0.5);
-        Visuals.fx(ctx, f.type, s.px, s.py, t, prog);
+        const from = (typeof f.fromX === "number" && typeof f.fromY === "number") ? toScreen(f.fromX + 0.5, f.fromY + 0.5) : null;
+        Visuals.fx(ctx, f.type, s.px, s.py, t, prog, { damage: f.damage, from, itemKind: f.itemKind });
       }
       game.fx = keep;
     }

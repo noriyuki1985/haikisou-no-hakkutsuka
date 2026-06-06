@@ -337,9 +337,11 @@ const ItemSystem = (() => {
     if (hit) {
       const damage = ITEM_DEFS[item.kind]?.throwDamage || 1;
       hit.hp -= damage;
+      World.pushFx(game, "throw", hit.x, hit.y, { actorId: "player", targetId: hit.id, fromX: game.player.x, fromY: game.player.y, damage, itemKind: item.kind });
       World.addLog(game, `${getItemName(game, item)}を投げ、${hit.name}に${damage}ダメージ。`);
       if (hit.hp <= 0) EnemySystem.defeatEnemy(game, hit);
     } else if (!World.getItemAt(game, last.x, last.y) && !World.isBlockedByEntity(game, last.x, last.y)) {
+      World.pushFx(game, "throw", last.x, last.y, { actorId: "player", fromX: game.player.x, fromY: game.player.y, itemKind: item.kind });
       game.items.push({ ...item, x: last.x, y: last.y });
       World.addLog(game, `${getItemName(game, item)}を投げた。床に落ちた。`);
     } else {
@@ -518,7 +520,7 @@ const EnemySystem = (() => {
     }
     enemy.hp -= damage;
     game.debug.playerAttackCount++;
-    World.pushFx(game, "hit", enemy.x, enemy.y);
+    World.pushFx(game, "hit", enemy.x, enemy.y, { actorId: "player", targetId: enemy.id, fromX: game.player.x, fromY: game.player.y, damage });
     systemSound("hit");
     World.addLog(game, `${enemy.name}を攻撃。${damage}ダメージ。`);
     World.recordCodex(game, `enemy:${enemy.type}`, enemy.name, ENEMY_DEFS[enemy.type]?.desc || "自律機械。 ");
@@ -559,7 +561,7 @@ const EnemySystem = (() => {
     const damage = Math.max(1, rawDamage - (armorDef?.defenseBonus || 0));
     game.player.hp = Math.max(0, game.player.hp - damage);
     game.debug.enemyAttackCount++;
-    World.pushFx(game, "hurt", game.player.x, game.player.y);
+    World.pushFx(game, "hurt", game.player.x, game.player.y, { actorId: enemy.id, targetId: "player", fromX: enemy.x, fromY: enemy.y, damage });
     systemSound("hurt");
     World.addLog(game, `${enemy.name}が発掘家を攻撃。HP ${game.player.hp}/${game.player.maxHp}。`);
     applyContactAbility(game, enemy);
@@ -623,7 +625,10 @@ const EnemySystem = (() => {
 
   function updateAwareness(game, enemy) {
     if (enemyCanSeePlayer(game, enemy)) {
-      if (enemy.state !== "chase" && game.visible[enemy.y]?.[enemy.x]) World.addLog(game, `${enemy.name}が発掘家を捕捉した。`);
+      if (enemy.state !== "chase" && game.visible[enemy.y]?.[enemy.x]) {
+        World.addLog(game, `${enemy.name}が発掘家を捕捉した。`);
+        World.pushFx(game, "alert", enemy.x, enemy.y, { actorId: enemy.id });
+      }
       enemy.state = "chase";
       enemy.lastSeen = { x: game.player.x, y: game.player.y };
       enemy.memory = CONFIG.enemyMemoryTurns;
@@ -717,7 +722,7 @@ const EnemySystem = (() => {
     const damage = Math.max(1, rawDamage - (armorDef?.defenseBonus || 0));
     game.player.hp = Math.max(0, game.player.hp - damage);
       game.debug.bossLaserCount += enemy.type === "guardian" ? 1 : 0;
-      World.pushFx(game, enemy.type === "guardian" ? "laser" : "shoot", game.player.x, game.player.y);
+      World.pushFx(game, enemy.type === "guardian" ? "laser" : "shoot", game.player.x, game.player.y, { actorId: enemy.id, targetId: "player", fromX: enemy.x, fromY: enemy.y, damage });
       systemSound(enemy.type === "guardian" ? "laser" : "shoot");
       World.addLog(game, `${enemy.name}が射撃した。HP ${game.player.hp}/${game.player.maxHp}。`);
       if (game.player.hp <= 0 && onDeath) onDeath("発掘家は旧軍の射撃で倒れた。Nキーで再開。");

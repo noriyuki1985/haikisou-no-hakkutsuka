@@ -1,5 +1,5 @@
 // --- config.js ---
-const VERSION = "v17.4.0";
+const VERSION = "v17.4.2";
 const FEATURE_LEVEL = 1740;
 
 const FEATURES = {
@@ -60,7 +60,8 @@ const FEATURES = {
   enhancedCombatFxV15: true,
   mobileFirstV17: true,
   settlementStartV17: true,
-  toastLogV17: true
+  toastLogV17: true,
+  combatReadabilityV1742: true
 };
 
 const TILE = {
@@ -82,7 +83,9 @@ const CONFIG = {
   viewportHeightMobile: 9,
   mobileBreakpoint: 760,
   moveAnimMs: 135,
-  fxMs: 560,
+  fxMs: 720,
+  combatAnimMs: 360,
+  screenShakePx: 4.0,
   idleAnimMs: 1800,
   enemyAnimMs: 1500,
   spriteAnimStrength: 1.0,
