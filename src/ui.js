@@ -40,6 +40,7 @@ const Visuals = (() => {
   const UI_SPRITE_PATHS = {
     title: "assets/backgrounds/title.png",
     base: "assets/backgrounds/base.png",
+    dungeon: "assets/backgrounds/dungeon.png",
     panel: "assets/ui/panel.png"
   };
 
@@ -167,6 +168,19 @@ const Visuals = (() => {
     ctx.fillStyle = g;
     ctx.fillRect(x, y, w, h);
     return false;
+  }
+
+  function drawSceneTile(ctx, key, gx, gy, px, py, t) {
+    const img = SPRITES[`ui:${key}`];
+    if (!(img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0)) return false;
+    const cols = Math.max(1, CONFIG.mapWidth);
+    const rows = Math.max(1, CONFIG.mapHeight);
+    const cellW = img.naturalWidth / cols;
+    const cellH = img.naturalHeight / rows;
+    const sx = Math.max(0, Math.min(img.naturalWidth - cellW, gx * cellW));
+    const sy = Math.max(0, Math.min(img.naturalHeight - cellH, gy * cellH));
+    ctx.drawImage(img, sx, sy, cellW, cellH, px, py, t, t);
+    return true;
   }
 
   function getAsset(key) {
@@ -973,7 +987,7 @@ const Visuals = (() => {
     drawDamagePopup(ctx, cx, cy, t, progress, opts.damage, type);
   }
 
-  return { glyph, tile, item, enemy, npc, player, trap, fx, assetStatus, getAsset, drawAssetBackground };
+  return { glyph, tile, item, enemy, npc, player, trap, fx, assetStatus, getAsset, drawAssetBackground, drawSceneTile };
 })();
 
 
@@ -1285,6 +1299,60 @@ function createRenderer(elements) {
     ctx.restore();
   }
 
+  function drawSceneBackdropCell(game, tx, ty, px, py, t, visible) {
+    const sceneKey = game.screen === "title" ? "title" : game.screen === "base" ? "base" : "dungeon";
+    if (!Visuals.drawSceneTile || !Visuals.drawSceneTile(ctx, sceneKey, tx, ty, px, py, t)) {
+      return false;
+    }
+    ctx.save();
+    if (game.screen === "base") {
+      ctx.fillStyle = visible ? "rgba(14,10,8,0.04)" : "rgba(0,0,0,0.12)";
+    } else {
+      ctx.fillStyle = visible ? "rgba(4,10,12,0.14)" : "rgba(0,0,0,0.45)";
+    }
+    ctx.fillRect(px, py, t, t);
+    ctx.restore();
+    return true;
+  }
+
+  function drawFloorReadabilityOverlay(game, px, py, t, visible) {
+    ctx.save();
+    if (game.screen === "base") {
+      ctx.strokeStyle = visible ? "rgba(220,192,148,0.08)" : "rgba(0,0,0,0.14)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(px + 0.5, py + 0.5, t - 1, t - 1);
+      ctx.fillStyle = visible ? "rgba(255,228,190,0.025)" : "rgba(0,0,0,0.04)";
+      ctx.fillRect(px + 1, py + 1, t - 2, t - 2);
+    } else {
+      ctx.strokeStyle = visible ? "rgba(98,162,176,0.12)" : "rgba(34,58,66,0.10)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(px + 0.5, py + 0.5, t - 1, t - 1);
+      ctx.strokeStyle = visible ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.08)";
+      ctx.beginPath();
+      ctx.moveTo(px + t * 0.20, py + t * 0.28);
+      ctx.lineTo(px + t * 0.80, py + t * 0.28);
+      ctx.moveTo(px + t * 0.20, py + t * 0.72);
+      ctx.lineTo(px + t * 0.80, py + t * 0.72);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawEnhancedTile(game, kind, px, py, t, visible) {
+    if (kind === TILE.FLOOR) {
+      drawFloorReadabilityOverlay(game, px, py, t, visible);
+      return;
+    }
+    ctx.save();
+    if (game.screen === "base") {
+      ctx.globalAlpha = kind === TILE.WALL ? 0.56 : kind === TILE.ENTRANCE ? 0.92 : 0.72;
+    } else {
+      ctx.globalAlpha = kind === TILE.WALL ? 0.90 : 0.96;
+    }
+    Visuals.tile(ctx, kind, px, py, t, visible);
+    ctx.restore();
+  }
+
   function drawSettlementProps(game, toScreen, t, now) {
     if (game.screen !== "base" || !Array.isArray(game.settlementProps)) return;
     const pulse = 0.5 + 0.5 * Math.sin((now || 0) / 220);
@@ -1299,6 +1367,7 @@ function createRenderer(elements) {
       const ww = w * t;
       const hh = h * t;
       ctx.save();
+      ctx.globalAlpha = prop.type === "campfire" ? 0.92 : prop.type === "water" ? 0.82 : prop.type === "gate" || prop.type === "door" ? 0.74 : 0.28;
       if (prop.type === "house") {
         ctx.fillStyle = "rgba(36,31,28,0.46)";
         ctx.fillRect(px + 3, py + 5, ww - 6, hh - 8);
@@ -1530,8 +1599,10 @@ function createRenderer(elements) {
     ctx.clearRect(0, 0, cols * t, rows * t);
     const shake = screenShakeFor(game, now);
     if (shake.x || shake.y) ctx.translate(shake.x, shake.y);
-    Visuals.drawAssetBackground(ctx, game.screen === "base" ? "base" : "title", 0, 0, cols * t, rows * t, "#05070b", "#020203");
-    ctx.fillStyle = "rgba(0,0,0,0.45)";
+    const backgroundKey = game.screen === "title" ? "title" : game.screen === "base" ? "base" : "dungeon";
+    Visuals.drawAssetBackground(ctx, backgroundKey, 0, 0, cols * t, rows * t, "#05070b", "#020203");
+    const backgroundShade = game.screen === "title" ? 0.26 : game.screen === "base" ? 0.10 : 0.18;
+    ctx.fillStyle = `rgba(0,0,0,${backgroundShade})`;
     ctx.fillRect(0, 0, cols * t, rows * t);
 
     const pp = dispOf("player", game.player.x, game.player.y);
@@ -1556,7 +1627,9 @@ function createRenderer(elements) {
           ctx.fillRect(px + 1, py + 1, t - 2, t - 2);
           continue;
         }
-        Visuals.tile(ctx, game.map[ty][tx], px, py, t, Boolean(game.visible[ty]?.[tx]));
+        const visible = Boolean(game.visible[ty]?.[tx]);
+        drawSceneBackdropCell(game, tx, ty, px, py, t, visible);
+        drawEnhancedTile(game, game.map[ty][tx], px, py, t, visible);
       }
     }
 
@@ -1780,7 +1853,7 @@ function createRenderer(elements) {
       appendLine(basePanel, "生活の残る固定集落。住人は焚き火と仕事場の間を歩き回る。", "selected-line");
       appendLine(basePanel, "中央の焚き火、左手の水場、右手の作業台と廃材置き場、東側の隔壁入口を見て回れる。");
       appendLine(basePanel, `浄水コア ${game.settlement.cores} / 発掘 ${game.settlement.runs} / 最深 ${game.settlement.bestDepth}`);
-      appendLine(basePanel, "会話: 住人にぶつかる / 1〜5", "muted-line");
+      appendLine(basePanel, "会話: 住人のいる方向へ進んでぶつかる", "muted-line");
       appendLine(basePanel, "入口に立つと演出付きで廃棄層へ進入", "muted-line");
       return;
     }
@@ -1911,9 +1984,10 @@ function createRenderer(elements) {
     if (game.helpOpen) {
       screenPanel.classList.add("compact-menu-screen");
       h.textContent = "ヘルプ / 操作説明";
-      appendPanelLine("スマホ: 方向パッドで8方向移動、中央で足踏み。下段ボタンで拾う/使う・所持品・投げる・メニュー。", "menu-line");
+      appendPanelLine("スマホ: キャンバス全体を見えない9分割エリアとして扱う。押した位置の方向へ移動し、中央は足踏み/足元の遺物取得。", "menu-line");
+      appendPanelLine("NPCや敵のいる方向へ進むと、会話または攻撃を自動実行する。");
       appendPanelLine("PC: 矢印/WASDで移動、斜めはQ/E/Z/Cまたはテンキー、.で足踏み。");
-      appendPanelLine("拾う: G / 所持品: I / 選択: 1〜8または[ ] / 使用: U / 置く: X / 投げる: T / 調べる: F");
+      appendPanelLine("足元の遺物: 中央タップまたはG / 所持品: I / 選択: 1〜8または[ ] / 使用: U / 置く: X / 投げる: T / 調べる: F");
       appendPanelLine("拠点: B / 探索メニュー: M / 途中帰還: P / 記録: L / 新規発掘: N");
       appendPanelLine("目的: 深度5で防衛端末を停止し、中枢防衛機を止め、浄水コアを回収する。地図は歩いて開拓する。");
       appendButtons([{ label: "閉じる", cmd: "close" }]);
@@ -1959,14 +2033,7 @@ function createRenderer(elements) {
       appendPanelLine(talk.role, "section-line");
       for (const line of talk.lines.slice(0, 3)) appendPanelLine(line, "menu-line");
       appendSceneCard(screenPanel, "集落メモ", NPC_PORTRAIT_META[talk.key]?.place || "この住人は集落の一角で働いている。");
-      appendButtons([
-        { label: "水守り", cmd: "talk", arg: 0 },
-        { label: "老発掘家", cmd: "talk", arg: 1 },
-        { label: "修理屋", cmd: "talk", arg: 2 },
-        { label: "見張り", cmd: "talk", arg: 3 },
-        { label: "記録係", cmd: "talk", arg: 4 },
-        { label: "閉じる", cmd: "close" }
-      ]);
+      appendButtons([{ label: "閉じる", cmd: "close" }]);
       return;
     }
 
@@ -1984,16 +2051,8 @@ function createRenderer(elements) {
     if (game.screen === "base") {
       screenPanel.classList.add("base-screen", "base-menu-screen", "settlement-screen");
       h.textContent = "外縁集落";
-      appendPanelLine("AIが作り捨てる廃棄層の外側。住人に話し、目的を確認してから発掘へ向かう。", "menu-line");
+      appendPanelLine("AIが作り捨てる廃棄層の外側。住人のいる方向へ進むと会話できる。目的を確認してから発掘へ向かう。", "menu-line");
       appendPanelLine(`浄水コア ${game.settlement.cores} / 発掘 ${game.settlement.runs} / 最深 ${game.settlement.bestDepth}`, "muted-line");
-      appendPanelLine("住人に話す", "section-line");
-      appendButtons([
-        { label: "水守り", cmd: "talk", arg: 0 },
-        { label: "老発掘家", cmd: "talk", arg: 1 },
-        { label: "修理屋", cmd: "talk", arg: 2 },
-        { label: "見張り", cmd: "talk", arg: 3 },
-        { label: "記録係", cmd: "talk", arg: 4 }
-      ]);
       appendPanelLine("行動", "section-line");
       appendButtons([
         { label: "発掘へ", cmd: "start" },
@@ -2040,9 +2099,9 @@ function createRenderer(elements) {
     const overlay = game.helpOpen || game.tutorialOpen || game.storyOpen || game.endingOpen || game.runRecordOpen || game.runMenuOpen || game.inventoryOpen || game.npcDialog;
     const playable = (game.screen === "run" || game.screen === "base") && !overlay && !game.isGameOver && !game.isClear;
     controls.classList.toggle("controls-dim", !playable);
+    controls.classList.toggle("controls-base", game.screen === "base");
     if (actionPickupLabel) {
-      if (game.screen === "base") actionPickupLabel.textContent = "話す";
-      else actionPickupLabel.textContent = lastGame && World.getItemAt(game, game.player.x, game.player.y) ? "拾う" : "使う";
+      actionPickupLabel.textContent = lastGame && game.screen === "run" && World.getItemAt(game, game.player.x, game.player.y) ? "拾う" : "使う";
     }
   }
 
@@ -2120,7 +2179,6 @@ function bindInput(app) {
     if (key === "t") return app.throwSelectedItem();
 
     const index = Number(key) - 1;
-    if (Number.isInteger(index) && index >= 0 && index < 5 && !code.startsWith("Numpad") && app.talkToNpcFromBase(index)) return;
     if (Number.isInteger(index) && index >= 0 && index < 8 && !code.startsWith("Numpad")) return app.selectInventoryIndex(index);
   });
 }
@@ -2150,7 +2208,6 @@ function bindTouch(app) {
     reset: () => app.resetProgress(),
     start: () => app.startExploration(),
     close: () => app.closeOverlay(),
-    talk: arg => app.talkToNpcFromBase(Number(arg)),
     difficulty: () => app.cycleDifficulty()
   };
 
@@ -2166,6 +2223,40 @@ function bindTouch(app) {
   }
 
   if (typeof document === "undefined") return;
+
+  const tapZones = document.getElementById("tapZones");
+  if (tapZones) {
+    const handleTapZone = event => {
+      let dx = 0;
+      let dy = 0;
+      const zone = event.target && event.target.closest ? event.target.closest("[data-tap-dir]") : null;
+      if (zone && tapZones.contains(zone)) {
+        const parts = String(zone.dataset.tapDir || "0,0").split(",").map(Number);
+        dx = Number.isFinite(parts[0]) ? Math.max(-1, Math.min(1, parts[0])) : 0;
+        dy = Number.isFinite(parts[1]) ? Math.max(-1, Math.min(1, parts[1])) : 0;
+      } else {
+        const rect = tapZones.getBoundingClientRect();
+        if (!rect.width || !rect.height) return;
+        const x = Math.max(0, Math.min(rect.width - 1, event.clientX - rect.left));
+        const y = Math.max(0, Math.min(rect.height - 1, event.clientY - rect.top));
+        const col = Math.max(0, Math.min(2, Math.floor((x / rect.width) * 3)));
+        const row = Math.max(0, Math.min(2, Math.floor((y / rect.height) * 3)));
+        dx = col - 1;
+        dy = row - 1;
+      }
+      if (typeof AudioSystem !== "undefined") AudioSystem.unlock();
+      if (dx === 0 && dy === 0 && app.centerTapAction) app.centerTapAction();
+      else app.movePlayer(dx, dy);
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    if (window.PointerEvent) {
+      tapZones.addEventListener("pointerup", handleTapZone);
+    } else {
+      tapZones.addEventListener("click", handleTapZone);
+    }
+  }
+
   // click は mouse/touch の両方で発火する。
   // v11.0.1: pointerdownでpreventDefaultだけを呼ぶと、端末によってclick自体が抑止されるため廃止。
   // タッチの誤作動対策はCSSのtouch-actionとbutton typeで行う。

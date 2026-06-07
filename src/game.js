@@ -392,7 +392,7 @@ function createGameApp(elements) {
       return;
     }
     const item = World.getItemAt(game, game.player.x, game.player.y);
-    if (item) World.addLog(game, `${ItemSystem.getItemName(game, item)}が落ちている。Gキーで拾える。`);
+    if (item) World.addLog(game, `${ItemSystem.getItemName(game, item)}が落ちている。拾うボタンで取得できる。`);
     const tile = World.getTile(game, game.player.x, game.player.y);
     if (tile === TILE.LIFT) return moveToNextDepth();
     if (tile === TILE.CORE) return acquireCore();
@@ -408,7 +408,11 @@ function createGameApp(elements) {
   }
 
   function contextPickupOrUse() {
-    if (game.screen === "base") return talkAdjacentNpc();
+    if (game.screen === "base") {
+      World.addLog(game, "住人のいる方向へ進むと会話できる。 ");
+      render();
+      return;
+    }
     if (!runInputAllowed()) return;
     if (game.isGameOver || game.isClear) return endMessage();
     if (World.getItemAt(game, game.player.x, game.player.y)) {
@@ -416,6 +420,17 @@ function createGameApp(elements) {
     } else {
       useSelectedInventoryItem();
     }
+  }
+
+  function centerTapAction() {
+    if (game.screen === "base") return talkAdjacentNpc();
+    if (game.screen === "run") {
+      if (!runInputAllowed()) return;
+      if (game.isGameOver || game.isClear) return endMessage();
+      if (World.getItemAt(game, game.player.x, game.player.y)) return pickupItemAtPlayer();
+      return waitTurn();
+    }
+    return startExploration();
   }
 
   function useInventoryItem(index) {
@@ -839,6 +854,7 @@ function createGameApp(elements) {
     movePlayer,
     pickupItemAtPlayer,
     contextPickupOrUse,
+    centerTapAction,
     useInventoryItem,
     upgradeBase,
     cycleDifficulty,

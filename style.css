@@ -1076,7 +1076,7 @@ kbd {
   .log { max-height: 30px; }
 }
 
-/* v17.5.0-a1: in-screen translucent controls */
+/* v17.5.2: in-screen translucent controls */
 .game-stage {
   position: relative;
   min-width: 0;
@@ -1344,5 +1344,143 @@ kbd {
 
   .npc-portrait-card__image {
     min-height: 112px;
+  }
+}
+
+/* v17.5.2: invisible 9-zone screen input, no arrow pad */
+.tap-zones {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  background: transparent;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+}
+
+.controls-overlay {
+  justify-content: center;
+  align-items: flex-end;
+  z-index: 20;
+}
+
+.controls-overlay .dpad {
+  display: none !important;
+}
+
+.controls-overlay .action-bar {
+  width: min(420px, calc(100% - 24px));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: 1fr;
+  padding: 8px;
+  gap: 6px;
+}
+
+.controls-overlay .primary-action {
+  grid-column: auto;
+}
+
+.controls-overlay.controls-base .primary-action {
+  display: none;
+}
+
+.controls-overlay.controls-base .action-bar {
+  width: min(320px, calc(100% - 24px));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 760px) {
+  :root {
+    --mobile-controls-h: 58px;
+  }
+
+  .tap-zones {
+    inset: 0;
+  }
+
+  .controls.controls-overlay {
+    left: 6px;
+    right: 6px;
+    bottom: 6px;
+    justify-content: center;
+  }
+
+  .controls.controls-overlay .action-bar {
+    width: min(360px, calc(100% - 12px));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-rows: 1fr;
+    padding: 6px;
+    gap: 5px;
+  }
+
+  .controls.controls-overlay.controls-base .action-bar {
+    width: min(280px, calc(100% - 12px));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .controls.controls-overlay .primary-action,
+  .controls.controls-overlay .secondary-throw {
+    display: block !important;
+  }
+
+  .controls.controls-overlay.controls-base .primary-action {
+    display: none !important;
+  }
+
+  .controls.controls-overlay .abtn {
+    min-height: 32px;
+    padding: 4px 5px;
+    font-size: 11px;
+  }
+
+  .hud {
+    bottom: calc(var(--mobile-controls-h) + max(8px, env(safe-area-inset-bottom)));
+  }
+}
+
+/* v17.5.2: strict invisible 3x3 tap grid. No on-canvas direction/action buttons. */
+.game-stage {
+  position: relative;
+  overflow: hidden;
+}
+
+.tap-zones {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  background: transparent;
+  opacity: 1;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  cursor: pointer;
+}
+
+.tap-zone {
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  background: transparent;
+  border: 0;
+  opacity: 0;
+}
+
+.controls-overlay,
+.dpad,
+.dbtn {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+@media (max-width: 760px) {
+  :root {
+    --mobile-controls-h: 0px;
+  }
+
+  .hud {
+    bottom: max(8px, env(safe-area-inset-bottom));
   }
 }
