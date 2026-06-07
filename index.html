@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>廃棄層の発掘家 v17.5.0-f2</title>
+  <title>廃棄層の発掘家 v17.5.1</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <main class="game">
     <section class="panel">
-      <h1>廃棄層の発掘家 <span id="versionText" class="ver">Version: v17.5.0-f2</span></h1>
+      <h1>廃棄層の発掘家 <span id="versionText" class="ver">Version: v17.5.1</span></h1>
       <div class="bars">
         <div class="bar"><span class="bar-label">HP</span><span class="bar-track"><span id="hpFill" class="bar-fill"></span></span><span id="hpText" class="bar-val">-</span></div>
         <div class="bar"><span class="bar-label">空腹</span><span class="bar-track"><span id="hungerFill" class="bar-fill"></span></span><span id="hungerText" class="bar-val">-</span></div>
@@ -24,18 +24,8 @@
     <section class="play-area">
       <div class="game-stage">
         <canvas id="gameCanvas" width="672" height="480"></canvas>
+        <div class="tap-zones" id="tapZones" aria-hidden="true"></div>
         <section class="controls controls-overlay" id="controls">
-          <div class="dpad">
-            <button type="button" class="dbtn" data-cmd="move" data-arg="-1,-1" aria-label="左上">↖</button>
-            <button type="button" class="dbtn" data-cmd="move" data-arg="0,-1" aria-label="上">↑</button>
-            <button type="button" class="dbtn" data-cmd="move" data-arg="1,-1" aria-label="右上">↗</button>
-            <button type="button" class="dbtn" data-cmd="move" data-arg="-1,0" aria-label="左">←</button>
-            <button type="button" class="dbtn wait" data-cmd="move" data-arg="0,0" aria-label="足踏み">・</button>
-            <button type="button" class="dbtn" data-cmd="move" data-arg="1,0" aria-label="右">→</button>
-            <button type="button" class="dbtn" data-cmd="move" data-arg="-1,1" aria-label="左下">↙</button>
-            <button type="button" class="dbtn" data-cmd="move" data-arg="0,1" aria-label="下">↓</button>
-            <button type="button" class="dbtn" data-cmd="move" data-arg="1,1" aria-label="右下">↘</button>
-          </div>
           <div class="action-bar">
             <button type="button" class="abtn primary-action" data-cmd="pickup"><span id="actionPickupLabel">拾う/使う</span></button>
             <button type="button" class="abtn" data-cmd="inventory">袋</button>
@@ -58,7 +48,7 @@
       <section class="box log" id="logPanel"><p>発掘家は再構成された廃棄区域に足を踏み入れた。</p></section>
     </section>
 
-    <p class="hint">スマホ基準: 集落で住人から目的を確認し、発掘へ出発。探索中は方向パッド、拾う/使う、袋、MENUを使う。</p>
+    <p class="hint">スマホ基準: 画面を9分割した見えない入力エリアで移動。NPCや敵のいる方向へ進むと、会話または攻撃を自動実行。</p>
   </main>
 
   <script src="src/core.js"></script>
