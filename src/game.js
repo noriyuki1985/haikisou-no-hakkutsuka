@@ -97,6 +97,8 @@ function createGameApp(elements) {
   }
 
   function clearOverlays() {
+    clearTransitionTimers();
+    game.transition = null;
     game.helpOpen = false;
     game.tutorialOpen = false;
     game.storyOpen = false;
@@ -109,20 +111,52 @@ function createGameApp(elements) {
 
   function enterDungeonFromSettlement() {
     if (game.screen !== "base") return false;
+    if (game.transition?.type === "entrance") return true;
     clearOverlays();
-    resetRunState(true);
-    openRunScreen();
-    World.addLog(game, "廃棄層の入口をくぐった。内部構造が再構成される。 ");
-    MapSystem.generate(game);
-    game.settlement.bestDepth = Math.max(game.settlement.bestDepth, game.depth);
-    World.addLog(game, `区画生成完了。部屋数 ${game.rooms.length}。敵 ${game.enemies.length} 体を検出。`);
-    if (FEATURES.floorEvents) World.addLog(game, `フロアイベント: ${FLOOR_EVENT_DEFS[game.floorEvent]?.name || "通常稼働"}。`);
-    playSound("terminal");
+    clearTransitionTimers();
+    const stepMs = CONFIG.entranceSequenceStepMs || 520;
+    game.transition = { type: "entrance", step: "warning", startedAt: Date.now() };
+    World.addLog(game, "警告: 廃棄層は高汚染区画。装備確認を開始。 ");
+    playSound("warning");
     render();
+
+    transitionTimers.push(setTimeout(() => {
+      game.transition = { type: "entrance", step: "mask", startedAt: Date.now() };
+      World.addLog(game, "マスク装着。シール良好。 ");
+      playSound("ui");
+      render();
+    }, stepMs));
+
+    transitionTimers.push(setTimeout(() => {
+      game.transition = { type: "entrance", step: "door", startedAt: Date.now() };
+      World.addLog(game, "隔壁を解放。扉機構が軋みながら開く。 ");
+      playSound("terminal");
+      render();
+    }, stepMs * 2));
+
+    transitionTimers.push(setTimeout(() => {
+      game.transition = { type: "entrance", step: "descend", startedAt: Date.now() };
+      resetRunState(true);
+      openRunScreen();
+      World.addLog(game, "廃棄層の入口をくぐった。内部構造が再構成される。 ");
+      MapSystem.generate(game);
+      game.settlement.bestDepth = Math.max(game.settlement.bestDepth, game.depth);
+      World.addLog(game, `区画生成完了。部屋数 ${game.rooms.length}。敵 ${game.enemies.length} 体を検出。`);
+      if (FEATURES.floorEvents) World.addLog(game, `フロアイベント: ${FLOOR_EVENT_DEFS[game.floorEvent]?.name || "通常稼働"}。`);
+      game.transition = null;
+      clearTransitionTimers();
+      playSound("terminal");
+      render();
+    }, stepMs * 3));
     return true;
   }
 
   function baseInputBlocked() {
+    if (game.transition?.type === "entrance") {
+      World.addLog(game, "隔壁通過シーケンス中。 ");
+      render();
+      return true;
+    }
     if (game.helpOpen || game.storyOpen || game.endingOpen || game.runRecordOpen || game.npcDialog || game.tutorialOpen || game.inventoryOpen || game.runMenuOpen) {
       World.addLog(game, "画面を閉じてから集落を歩く。 ");
       render();

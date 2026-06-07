@@ -89,6 +89,14 @@ const Visuals = (() => {
     recorder: "sorter"
   };
 
+  const NPC_PORTRAIT_META = {
+    water_keeper: { title: "水守", role: "濾過槽と給水の番人", place: "水場の脇で配水を見守っている", note: "水の濁りや配給量に敏感。静かだが周囲をよく見ている。" },
+    old_digger: { title: "老発掘家", role: "拾得物の目利き", place: "寝床と焚き火の近くに腰を下ろす", note: "昔話が長い。危ない区画ほど覚えている。" },
+    mechanic: { title: "修理屋", role: "工具と発電機の整備担当", place: "作業台と廃材置き場を行き来する", note: "口は悪いが手は確か。使える部品を見ると黙れない。" },
+    lookout: { title: "見張り", role: "外縁警戒", place: "見張り台から外を睨んでいる", note: "入口周辺の異音にすぐ反応する。" },
+    recorder: { title: "記録係", role: "回収記録と日報の整理", place: "記録小屋で帳面を抱えている", note: "淡々としているが、誰がどこへ行ったか全部覚えている。" }
+  };
+
   const ANIM_PROFILES = {
     player: { ms: 1800, bob: 0.030, sway: 0.018, scaleX: 0.010, scaleY: 0.014, glow: "rgba(126,220,255,1)" },
     player_town: { ms: 1800, bob: 0.030, sway: 0.018, scaleX: 0.010, scaleY: 0.014, glow: "rgba(126,220,255,1)" },
@@ -1007,6 +1015,49 @@ function createRenderer(elements) {
     node.appendChild(p);
   }
 
+  function appendSceneCard(node, title, body) {
+    if (!node) return;
+    const card = document.createElement("div");
+    card.className = "scene-card";
+    const head = document.createElement("div");
+    head.className = "scene-card__title";
+    head.textContent = title;
+    const text = document.createElement("p");
+    text.className = "scene-card__body";
+    text.textContent = body;
+    card.append(head, text);
+    node.appendChild(card);
+  }
+
+  function appendNpcPortraitCard(node, npcKey) {
+    if (!node || !npcKey) return;
+    const spriteKey = NPC_SPRITE_KEYS[npcKey] || "medic";
+    const asset = Visuals.getAsset ? Visuals.getAsset(spriteKey) : null;
+    const meta = NPC_PORTRAIT_META[npcKey] || { title: NPC_DEFS[npcKey]?.name || npcKey, role: NPC_DEFS[npcKey]?.role || "住人", place: "集落で生活している", note: "" };
+    const card = document.createElement("div");
+    card.className = "npc-portrait-card";
+    const imgWrap = document.createElement("div");
+    imgWrap.className = "npc-portrait-card__image";
+    const img = document.createElement("img");
+    img.alt = meta.title;
+    img.src = asset?.src || `assets/characters/${spriteKey}.png`;
+    imgWrap.appendChild(img);
+    const body = document.createElement("div");
+    body.className = "npc-portrait-card__body";
+    const name = document.createElement("div");
+    name.className = "npc-portrait-card__name";
+    name.textContent = `${meta.title}｜${meta.role}`;
+    const place = document.createElement("div");
+    place.className = "npc-portrait-card__place";
+    place.textContent = meta.place;
+    const note = document.createElement("p");
+    note.className = "npc-portrait-card__note";
+    note.textContent = meta.note;
+    body.append(name, place, note);
+    card.append(imgWrap, body);
+    node.appendChild(card);
+  }
+
   function getItemName(game, item) {
     return ItemSystem.getItemName(game, item);
   }
@@ -1234,6 +1285,178 @@ function createRenderer(elements) {
     ctx.restore();
   }
 
+  function drawSettlementProps(game, toScreen, t, now) {
+    if (game.screen !== "base" || !Array.isArray(game.settlementProps)) return;
+    const pulse = 0.5 + 0.5 * Math.sin((now || 0) / 220);
+    for (const prop of game.settlementProps) {
+      const x = prop.x || 0;
+      const y = prop.y || 0;
+      const w = Math.max(1, prop.w || 1);
+      const h = Math.max(1, prop.h || 1);
+      const s = toScreen(x, y);
+      const px = s.px;
+      const py = s.py;
+      const ww = w * t;
+      const hh = h * t;
+      ctx.save();
+      if (prop.type === "house") {
+        ctx.fillStyle = "rgba(36,31,28,0.46)";
+        ctx.fillRect(px + 3, py + 5, ww - 6, hh - 8);
+        ctx.fillStyle = "rgba(118,88,64,0.82)";
+        ctx.fillRect(px + 2, py + 6, ww - 4, hh - 10);
+        ctx.fillStyle = "rgba(74,55,43,0.85)";
+        ctx.beginPath();
+        ctx.moveTo(px, py + 8);
+        ctx.lineTo(px + ww * 0.5, py - 4);
+        ctx.lineTo(px + ww, py + 8);
+        ctx.closePath();
+        ctx.fill();
+      } else if (prop.type === "water") {
+        ctx.fillStyle = "rgba(32,48,50,0.52)";
+        ctx.fillRect(px, py, ww, hh);
+        ctx.fillStyle = `rgba(86,170,176,${0.50 + pulse * 0.18})`;
+        ctx.fillRect(px + 3, py + 3, ww - 6, hh - 6);
+        ctx.strokeStyle = "rgba(165,220,228,0.55)";
+        ctx.strokeRect(px + 2, py + 2, ww - 4, hh - 4);
+      } else if (prop.type === "campfire") {
+        ctx.fillStyle = "rgba(48,34,20,0.78)";
+        ctx.fillRect(px + t * 0.15, py + t * 0.72, t * 0.7, t * 0.14);
+        ctx.fillStyle = `rgba(255,150,46,${0.65 + pulse * 0.25})`;
+        ctx.beginPath();
+        ctx.moveTo(px + t * 0.52, py + t * 0.20);
+        ctx.quadraticCurveTo(px + t * 0.74, py + t * 0.56, px + t * 0.48, py + t * 0.80);
+        ctx.quadraticCurveTo(px + t * 0.28, py + t * 0.54, px + t * 0.52, py + t * 0.20);
+        ctx.fill();
+        ctx.fillStyle = `rgba(255,228,138,${0.46 + pulse * 0.18})`;
+        ctx.beginPath();
+        ctx.arc(px + t * 0.5, py + t * 0.58, t * 0.22, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (prop.type === "workbench") {
+        ctx.fillStyle = "rgba(93,73,58,0.92)";
+        ctx.fillRect(px + 4, py + 7, ww - 8, hh - 10);
+        ctx.fillStyle = "rgba(188,170,140,0.44)";
+        ctx.fillRect(px + 6, py + 9, ww - 12, Math.max(4, hh * 0.25));
+      } else if (prop.type === "scrap") {
+        ctx.fillStyle = "rgba(88,83,72,0.78)";
+        for (let i = 0; i < 6; i++) {
+          const ox = (i % 3) * (ww / 3);
+          const oy = Math.floor(i / 3) * (hh / 2);
+          ctx.fillRect(px + ox + 2, py + oy + 3, Math.max(5, ww / 4), Math.max(4, hh / 3));
+        }
+      } else if (prop.type === "camp") {
+        ctx.fillStyle = "rgba(72,52,34,0.38)";
+        ctx.fillRect(px + 2, py + 4, ww - 4, hh - 8);
+        ctx.strokeStyle = "rgba(190,145,82,0.32)";
+        ctx.strokeRect(px + 3, py + 5, ww - 6, hh - 10);
+      } else if (prop.type === "watchtower") {
+        ctx.strokeStyle = "rgba(150,132,106,0.78)";
+        ctx.lineWidth = 3;
+        ctx.strokeRect(px + 8, py + 4, ww - 16, hh - 12);
+        ctx.beginPath();
+        ctx.moveTo(px + 10, py + hh - 2);
+        ctx.lineTo(px + 16, py + 8);
+        ctx.moveTo(px + ww - 10, py + hh - 2);
+        ctx.lineTo(px + ww - 16, py + 8);
+        ctx.stroke();
+      } else if (prop.type === "yard") {
+        ctx.fillStyle = "rgba(45,40,38,0.24)";
+        ctx.fillRect(px + 1, py + 1, ww - 2, hh - 2);
+        ctx.strokeStyle = "rgba(150,120,90,0.36)";
+        ctx.strokeRect(px + 1, py + 1, ww - 2, hh - 2);
+      } else if (prop.type === "gate") {
+        ctx.fillStyle = "rgba(46,42,44,0.60)";
+        ctx.fillRect(px, py, ww, hh);
+        ctx.strokeStyle = "rgba(194,166,112,0.48)";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(px + 2, py + 2, ww - 4, hh - 4);
+        ctx.beginPath();
+        ctx.moveTo(px + ww * 0.5, py + 3);
+        ctx.lineTo(px + ww * 0.5, py + hh - 3);
+        ctx.stroke();
+      } else if (prop.type === "door") {
+        ctx.fillStyle = "rgba(214,184,118,0.88)";
+        ctx.fillRect(px + 6, py + 4, t - 12, t - 8);
+      }
+      ctx.restore();
+    }
+  }
+
+  function getIntentVisual(enemy) {
+    const kind = enemy?.intent?.kind || "melee";
+    if (kind === "laser") return { color: "rgba(255,92,72,0.92)", chip: "砲" };
+    if (kind === "shoot") return { color: "rgba(255,188,72,0.92)", chip: "射" };
+    if (kind === "pounce") return { color: "rgba(255,130,92,0.92)", chip: "跳" };
+    if (kind === "slash") return { color: "rgba(255,120,120,0.92)", chip: "斬" };
+    return { color: "rgba(255,170,88,0.92)", chip: "危" };
+  }
+
+  function drawEnemyIntentOverlay(enemy, px, py, t, toScreen, now) {
+    if (!enemy?.intent) return;
+    const { color, chip } = getIntentVisual(enemy);
+    const pulse = 0.5 + 0.5 * Math.sin((now || 0) / 140);
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.5 + pulse * 0.35;
+    ctx.lineWidth = Math.max(2, t * 0.05);
+    ctx.beginPath();
+    ctx.arc(px + t * 0.5, py + t * 0.48, t * (0.36 + pulse * 0.05), 0, Math.PI * 2);
+    ctx.stroke();
+    const targetX = typeof enemy.intent.targetX === "number" ? enemy.intent.targetX : enemy.x;
+    const targetY = typeof enemy.intent.targetY === "number" ? enemy.intent.targetY : enemy.y;
+    const s = toScreen(targetX, targetY);
+    ctx.beginPath();
+    ctx.moveTo(px + t * 0.5, py + t * 0.48);
+    ctx.lineTo(s.px + t * 0.5, s.py + t * 0.5);
+    ctx.stroke();
+    ctx.globalAlpha = 0.45 + pulse * 0.25;
+    ctx.strokeRect(s.px + t * 0.18, s.py + t * 0.18, t * 0.64, t * 0.64);
+    ctx.restore();
+
+    ctx.save();
+    ctx.fillStyle = "rgba(0,0,0,0.78)";
+    ctx.fillRect(px + t * 0.18, py - t * 0.22, t * 0.52, t * 0.28);
+    ctx.strokeStyle = color;
+    ctx.strokeRect(px + t * 0.18, py - t * 0.22, t * 0.52, t * 0.28);
+    ctx.fillStyle = "rgba(255,245,224,0.96)";
+    ctx.font = `${Math.max(12, Math.floor(t * 0.24))}px system-ui`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(chip, px + t * 0.44, py - t * 0.08);
+    ctx.restore();
+  }
+
+  function drawEntranceTransitionOverlay(game, width, height, now) {
+    if (game.transition?.type !== "entrance") return;
+    const step = game.transition.step || "warning";
+    const pulse = 0.5 + 0.5 * Math.sin((now || 0) / 180);
+    const panelW = Math.min(width - 40, 420);
+    const panelH = 160;
+    const x = (width - panelW) / 2;
+    const y = (height - panelH) / 2;
+    const title = step === "warning" ? "高汚染区画 接続前" : step === "mask" ? "マスク装着" : step === "door" ? "隔壁開放" : "廃棄層進入";
+    const body = step === "warning" ? "汚染警告を確認。帰還経路と残量を再点検している。" : step === "mask" ? "フィルタを装着し、呼吸音だけが近くなる。" : step === "door" ? "重い扉が軋み、暗い通路が口を開く。" : "暗転の向こうで区画再構成が始まる。";
+    ctx.save();
+    ctx.fillStyle = `rgba(0,0,0,${0.48 + pulse * 0.16})`;
+    ctx.fillRect(0, 0, width, height);
+    ctx.fillStyle = "rgba(10,10,12,0.86)";
+    ctx.fillRect(x, y, panelW, panelH);
+    ctx.strokeStyle = step === "door" || step === "descend" ? "rgba(220,180,108,0.80)" : "rgba(140,180,190,0.72)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x + 1, y + 1, panelW - 2, panelH - 2);
+    ctx.fillStyle = "rgba(250,236,210,0.96)";
+    ctx.font = "bold 22px system-ui";
+    ctx.textAlign = "left";
+    ctx.fillText(title, x + 24, y + 38);
+    ctx.font = "15px system-ui";
+    ctx.fillText(body, x + 24, y + 78);
+    ctx.font = "13px system-ui";
+    ctx.fillStyle = "rgba(200,210,215,0.88)";
+    ctx.fillText("装備確認 → マスク装着 → 隔壁開放", x + 24, y + 126);
+    ctx.restore();
+  }
+
   // ---- 世界の描画（毎フレーム） ----
 
   function drawFloorEventOverlay(game, width, height, now) {
@@ -1339,6 +1562,8 @@ function createRenderer(elements) {
 
     const toScreen = (gx, gy) => ({ px: (gx - camX) * t, py: (gy - camY) * t });
 
+    drawSettlementProps(game, toScreen, t, now);
+
     for (const trap of game.traps) {
       if (!trap.active || !trap.discovered) continue;
       if (!game.visible[trap.y]?.[trap.x] && !game.explored[trap.y]?.[trap.x]) continue;
@@ -1374,6 +1599,7 @@ function createRenderer(elements) {
       Visuals.enemy(ctx, enemy.type, s.px, s.py, t, { stun: enemy.stun > 0, now, seed: enemy.id, state: enemy.state, moving: d.moving, moveProgress: d.moveProgress });
       drawEntityCombatOverlay(ctx, s.px, s.py, t, cs, false);
       drawEnemyHpChip(ctx, s.px, s.py, t, enemy, cs);
+      drawEnemyIntentOverlay(enemy, s.px, s.py, t, toScreen, now);
     }
 
     const pc = combatOffsetFor(game, "player", now);
@@ -1397,6 +1623,7 @@ function createRenderer(elements) {
     }
 
     drawFloorEventOverlay(game, cols * t, rows * t, now);
+    drawEntranceTransitionOverlay(game, cols * t, rows * t, now);
 
     const vignette = ctx.createRadialGradient(cols * t * 0.5, rows * t * 0.5, Math.min(cols, rows) * t * 0.2, cols * t * 0.5, rows * t * 0.5, Math.max(cols, rows) * t * 0.62);
     vignette.addColorStop(0, "rgba(0,0,0,0)");
@@ -1471,9 +1698,11 @@ function createRenderer(elements) {
     if (game.screen === "base") {
       const ent = game.settlementEntrance || { x: 43, y: 16 };
       const atEntrance = game.player.x === ent.x && game.player.y === ent.y;
-      statusText.textContent = atEntrance
-        ? "外縁集落｜廃棄層入口：このまま進むと発掘を開始"
-        : "外縁集落｜住人にぶつかると会話｜東の廃棄層入口へ向かう";
+      statusText.textContent = game.transition?.type === "entrance"
+        ? "外縁集落｜隔壁通過シーケンス進行中"
+        : atEntrance
+          ? "外縁集落｜廃棄層入口：進入演出を開始"
+          : "外縁集落｜住人に話しかけられる生活空間｜東の廃棄層入口へ向かう";
       if (debugText) debugText.textContent = `debug: ${view.mode} ${view.cols}x${view.rows} dpr${view.dpr} / settlement turn ${game.settlementTurn || 0} / npc ${(game.npcs || []).length} / fx ${Array.isArray(game.fx) ? game.fx.length : 0}`;
       return;
     }
@@ -1548,11 +1777,11 @@ function createRenderer(elements) {
     h.textContent = game.screen === "base" ? "外縁集落" : "探索情報";
     basePanel.appendChild(h);
     if (game.screen === "base") {
-      appendLine(basePanel, "固定マップ。住人は歩き回る。", "selected-line");
-      appendLine(basePanel, "東側の赤い入口へ行くと、再構成される廃棄層に入る。");
+      appendLine(basePanel, "生活の残る固定集落。住人は焚き火と仕事場の間を歩き回る。", "selected-line");
+      appendLine(basePanel, "中央の焚き火、左手の水場、右手の作業台と廃材置き場、東側の隔壁入口を見て回れる。");
       appendLine(basePanel, `浄水コア ${game.settlement.cores} / 発掘 ${game.settlement.runs} / 最深 ${game.settlement.bestDepth}`);
       appendLine(basePanel, "会話: 住人にぶつかる / 1〜5", "muted-line");
-      appendLine(basePanel, "設定: M / ヘルプ: H / 記録: L", "muted-line");
+      appendLine(basePanel, "入口に立つと演出付きで廃棄層へ進入", "muted-line");
       return;
     }
     const floorEvent = FLOOR_EVENT_DEFS[game.floorEvent]?.name || "通常稼働";
@@ -1726,8 +1955,10 @@ function createRenderer(elements) {
       screenPanel.classList.add("npc-screen");
       const talk = getNpcDialogue(game, game.npcDialog);
       h.textContent = `${talk.name}`;
+      appendNpcPortraitCard(screenPanel, talk.key);
       appendPanelLine(talk.role, "section-line");
       for (const line of talk.lines.slice(0, 3)) appendPanelLine(line, "menu-line");
+      appendSceneCard(screenPanel, "集落メモ", NPC_PORTRAIT_META[talk.key]?.place || "この住人は集落の一角で働いている。");
       appendButtons([
         { label: "水守り", cmd: "talk", arg: 0 },
         { label: "老発掘家", cmd: "talk", arg: 1 },

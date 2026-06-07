@@ -1,6 +1,6 @@
 // --- config.js ---
-const VERSION = "v17.5.0-c3";
-const FEATURE_LEVEL = 1740;
+const VERSION = "v17.5.0-f2";
+const FEATURE_LEVEL = 1751;
 
 const FEATURES = {
   items: true,
@@ -62,7 +62,10 @@ const FEATURES = {
   settlementStartV17: true,
   toastLogV17: true,
   combatReadabilityV1742: true,
-  settlementWalkMapV1743: true
+  settlementWalkMapV1743: true,
+  settlementLifeSceneV1750: true,
+  entranceSequenceV1750: true,
+  attackTelegraphV1750: true
 };
 
 const TILE = {
@@ -126,7 +129,8 @@ const CONFIG = {
   floorEventChance: 0.85,
   bossTerminalCount: 3,
   maxRecentFloorEvents: 6,
-  settlementNpcStepChance: 0.55
+  settlementNpcStepChance: 0.55,
+  entranceSequenceStepMs: 520
 };
 
 
@@ -419,7 +423,7 @@ function getNpcDialogue(game, key) {
   if (key === "mechanic") lines.push("緊急帰還タグはクリア道具じゃない。探索を切り上げるための保険だ。危険なら使え。");
   if (key === "recorder" && runLogs.length) lines.push(`直近の発掘記録: ${runLogs[0].summary}`);
   if (key === "water_keeper" && (game.settlement?.water || 0) <= 0) lines.push("浄水フィルタは現場で使え。深部に進む前に汚染を落とせるかどうかで生存率が変わる。");
-  return { name: npc.name, role: npc.role, lines };
+  return { key: npc.key, name: npc.name, role: npc.role, lines };
 }
 
 
@@ -626,6 +630,8 @@ const GameState = (() => {
       settlementEntrance: { x: 43, y: 16 },
       settlementStart: { x: 8, y: 16 },
       settlementTurn: 0,
+      settlementProps: [],
+      transition: null,
       core: { x: 1, y: 1, active: false, acquired: false },
       terminals: [],
       disabledTerminals: 0,
@@ -831,15 +837,15 @@ const World = (() => {
 
 // --- settlement_map.js ---
 const SettlementSystem = (() => {
-  const START = { x: 8, y: 16 };
-  const ENTRANCE = { x: 43, y: 16 };
+  const START = { x: 7, y: 16 };
+  const ENTRANCE = { x: 42, y: 16 };
 
   const NPC_STARTS = [
-    { key: "water_keeper", x: 10, y: 12, homeX: 10, homeY: 12, radius: 4 },
-    { key: "old_digger", x: 8, y: 21, homeX: 8, homeY: 21, radius: 4 },
-    { key: "mechanic", x: 22, y: 14, homeX: 22, homeY: 14, radius: 4 },
-    { key: "lookout", x: 35, y: 16, homeX: 35, homeY: 16, radius: 5 },
-    { key: "recorder", x: 16, y: 21, homeX: 16, homeY: 21, radius: 3 }
+    { key: "water_keeper", x: 12, y: 10, homeX: 12, homeY: 10, radius: 3 },
+    { key: "old_digger", x: 10, y: 22, homeX: 10, homeY: 22, radius: 4 },
+    { key: "mechanic", x: 25, y: 12, homeX: 25, homeY: 12, radius: 4 },
+    { key: "lookout", x: 36, y: 10, homeX: 36, homeY: 10, radius: 5 },
+    { key: "recorder", x: 23, y: 23, homeX: 23, homeY: 23, radius: 3 }
   ];
 
   function setTile(map, x, y, tile) {
@@ -852,10 +858,41 @@ const SettlementSystem = (() => {
     }
   }
 
-  function addBuilding(map, x, y, w, h, doorX, doorY) {
+  function addBuilding(map, x, y, w, h, doors = []) {
     fillRect(map, x, y, w, h, TILE.WALL);
-    fillRect(map, x + 1, y + 1, w - 2, h - 2, TILE.FLOOR);
-    setTile(map, doorX, doorY, TILE.FLOOR);
+    fillRect(map, x + 1, y + 1, Math.max(1, w - 2), Math.max(1, h - 2), TILE.FLOOR);
+    for (const door of doors) setTile(map, door.x, door.y, TILE.FLOOR);
+  }
+
+  function addFence(map, x1, y1, x2, y2) {
+    if (x1 === x2) {
+      const [from, to] = y1 <= y2 ? [y1, y2] : [y2, y1];
+      for (let y = from; y <= to; y++) setTile(map, x1, y, TILE.WALL);
+      return;
+    }
+    if (y1 === y2) {
+      const [from, to] = x1 <= x2 ? [x1, x2] : [x2, x1];
+      for (let x = from; x <= to; x++) setTile(map, x, y1, TILE.WALL);
+    }
+  }
+
+  function createSettlementProps() {
+    return [
+      { type: "house", x: 8, y: 7, w: 8, h: 5, label: "水守の小屋" },
+      { type: "water", x: 12, y: 13, w: 4, h: 2, label: "水場" },
+      { type: "house", x: 20, y: 7, w: 10, h: 7, label: "修理屋工房" },
+      { type: "workbench", x: 25, y: 14, w: 3, h: 1, label: "作業台" },
+      { type: "scrap", x: 29, y: 14, w: 4, h: 2, label: "廃材置き場" },
+      { type: "campfire", x: 18, y: 16, w: 2, h: 2, label: "焚き火" },
+      { type: "camp", x: 16, y: 18, w: 7, h: 3, label: "共有広場" },
+      { type: "house", x: 7, y: 20, w: 8, h: 6, label: "老発掘家の寝床" },
+      { type: "house", x: 20, y: 20, w: 8, h: 6, label: "記録係の小屋" },
+      { type: "watchtower", x: 34, y: 6, w: 6, h: 4, label: "見張り台" },
+      { type: "yard", x: 31, y: 20, w: 7, h: 5, label: "選別ヤード" },
+      { type: "scrap", x: 33, y: 21, w: 4, h: 2, label: "廃材置き場" },
+      { type: "gate", x: 38, y: 13, w: 6, h: 7, label: "廃棄層入口" },
+      { type: "door", x: ENTRANCE.x, y: ENTRANCE.y, w: 1, h: 1, label: "隔壁" }
+    ];
   }
 
   function createMap() {
@@ -866,29 +903,38 @@ const SettlementSystem = (() => {
     fillRect(map, 2, 3, 1, 26, TILE.WALL);
     fillRect(map, 45, 3, 1, 26, TILE.WALL);
 
-    addBuilding(map, 6, 6, 10, 6, 11, 11);      // 水守り小屋
-    addBuilding(map, 18, 7, 10, 7, 22, 13);     // 修理屋
-    addBuilding(map, 13, 19, 9, 7, 16, 19);     // 記録小屋
-    addBuilding(map, 5, 18, 7, 5, 8, 18);       // 老発掘家の寝床
+    addBuilding(map, 8, 7, 8, 5, [{ x: 12, y: 11 }]);
+    addBuilding(map, 20, 7, 10, 7, [{ x: 25, y: 13 }]);
+    addBuilding(map, 7, 20, 8, 6, [{ x: 11, y: 20 }]);
+    addBuilding(map, 20, 20, 8, 6, [{ x: 23, y: 20 }]);
+    addBuilding(map, 34, 6, 6, 4, [{ x: 36, y: 9 }]);
 
-    fillRect(map, 31, 5, 8, 3, TILE.WALL);
-    fillRect(map, 32, 6, 6, 1, TILE.FLOOR);
-    setTile(map, 35, 8, TILE.FLOOR);
+    addFence(map, 31, 20, 37, 20);
+    addFence(map, 31, 24, 37, 24);
+    addFence(map, 31, 20, 31, 24);
+    addFence(map, 37, 20, 37, 24);
+    setTile(map, 34, 20, TILE.FLOOR);
 
-    fillRect(map, 34, 14, 10, 5, TILE.FLOOR);
-    fillRect(map, 34, 13, 10, 1, TILE.WALL);
-    fillRect(map, 34, 19, 10, 1, TILE.WALL);
-    setTile(map, 38, 13, TILE.FLOOR);
-    setTile(map, 38, 19, TILE.FLOOR);
+    fillRect(map, 38, 13, 6, 7, TILE.FLOOR);
+    addFence(map, 38, 13, 43, 13);
+    addFence(map, 38, 19, 43, 19);
+    addFence(map, 38, 13, 38, 19);
+    addFence(map, 43, 13, 43, 19);
+    setTile(map, 40, 13, TILE.FLOOR);
+    setTile(map, 40, 19, TILE.FLOOR);
     setTile(map, ENTRANCE.x, ENTRANCE.y, TILE.ENTRANCE);
 
-    for (let x = 4; x <= 43; x += 2) setTile(map, x, 16, TILE.FLOOR);
-    for (let y = 5; y <= 27; y += 2) setTile(map, 24, y, TILE.FLOOR);
+    fillRect(map, 11, 13, 5, 3, TILE.FLOOR);
+    fillRect(map, 12, 13, 3, 2, TILE.POLLUTION);
 
-    fillRect(map, 8, 13, 5, 2, TILE.POLLUTION); // 濁った貯水槽の仮表現
-    fillRect(map, 29, 22, 7, 2, TILE.WALL);
-    setTile(map, 32, 22, TILE.FLOOR);
-    setTile(map, 33, 22, TILE.FLOOR);
+    fillRect(map, 4, 15, 39, 3, TILE.FLOOR);
+    fillRect(map, 17, 12, 3, 8, TILE.FLOOR);
+    fillRect(map, 24, 13, 4, 3, TILE.FLOOR);
+    fillRect(map, 30, 20, 8, 5, TILE.FLOOR);
+
+    setTile(map, 5, 16, TILE.FLOOR);
+    setTile(map, 6, 16, TILE.FLOOR);
+    setTile(map, 41, 16, TILE.FLOOR);
     return map;
   }
 
@@ -917,8 +963,10 @@ const SettlementSystem = (() => {
     game.disabledTerminals = 0;
     game.bossDefeated = false;
     game.pendingExtract = false;
+    game.transition = null;
     game.settlementStart = { ...START };
     game.settlementEntrance = { ...ENTRANCE };
+    game.settlementProps = createSettlementProps();
     game.player.x = START.x;
     game.player.y = START.y;
     game.player.lastDir = { x: 1, y: 0 };

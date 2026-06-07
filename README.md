@@ -1,33 +1,13 @@
-# 廃棄層の発掘家 v17.5.0-c3
+# 廃棄層の発掘家 v17.5.0-f2
 
-## v17.5.0-c3 変更内容
+## v17.5.0-f2 デバッグ修正
 
-### v17.5.0-b2
-- 全キャラの頭身バランスを2.5頭身前後に寄せる方向で再調整
-- builder / logistics / medic / cleaner / soldier などのリアル感を低減
-- 敵メカの情報量を整理してシルエットを見やすく調整
-- キャラの足元位置を再調整
-- ゲーム内表示サイズを再調整
-
-### v17.5.0-c1
-- アイテム差し替え済み
-  - device
-  - equipment
-  - medicine
-  - nutrition_block
-  - tactical
-  - unknown
-
-### v17.5.0-c3
-- タイル差し替え済み
-  - floor
-  - wall
-  - lift
-  - terminal
-  - trap
-  - pollution
-  - core
+- NPC会話パネルで `talk.key` が未定義になり、顔グラ/集落メモが正しく参照されない問題を修正
+- `index.html` / `README.md` の表示バージョンが旧版 `v17.5.0-c3` のまま残っていた問題を修正
+- `src/core.js` の `VERSION` を `v17.5.0-f2` に更新
+- JS構文チェックを実施
+- 主要アセット参照の存在チェックを実施
 
 ## 起動方法
 
-index.html をブラウザで開いてください。
+`index.html` をブラウザで開いてください。

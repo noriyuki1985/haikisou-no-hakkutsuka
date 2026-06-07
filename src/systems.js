@@ -615,6 +615,68 @@ const EnemySystem = (() => {
     return VisibilitySystem.hasLineOfSight(game, enemy.x, enemy.y, game.player.x, game.player.y);
   }
 
+  function getEnemyIntentKind(enemy) {
+    if (enemy.type === "guardian") return "laser";
+    if (enemy.type === "soldier") return "shoot";
+    if (enemy.type === "hunter") return "pounce";
+    if (enemy.type === "cleaner") return "slash";
+    return "melee";
+  }
+
+  function beginEnemyIntent(game, enemy, kind) {
+    enemy.intent = { kind, targetX: game.player.x, targetY: game.player.y, turn: game.turn };
+    World.pushFx(game, "alert", enemy.x, enemy.y, { actorId: enemy.id, targetId: "player", fromX: enemy.x, fromY: enemy.y });
+    const message = kind === "laser"
+      ? `${enemy.name}が砲口を展開した。射線に入るな。`
+      : kind === "shoot"
+        ? `${enemy.name}が射撃姿勢に入った。`
+        : kind === "pounce"
+          ? `${enemy.name}が低く身構えた。飛びかかる気配だ。`
+          : kind === "slash"
+            ? `${enemy.name}が刃を振り上げた。`
+            : `${enemy.name}が攻撃動作に入った。`;
+    if (game.visible[enemy.y]?.[enemy.x]) World.addLog(game, message);
+  }
+
+  function clearEnemyIntent(enemy) {
+    enemy.intent = null;
+  }
+
+  function executeEnemyIntent(game, enemy, onDeath) {
+    if (!enemy.intent) return false;
+    const kind = enemy.intent.kind;
+    const visible = Boolean(game.visible[enemy.y]?.[enemy.x]);
+    if (["shoot", "laser"].includes(kind)) {
+      if (!lineShotPossible(game, enemy)) {
+        if (visible) World.addLog(game, `${enemy.name}の狙いが外れた。`);
+        clearEnemyIntent(enemy);
+        return false;
+      }
+      const armorDef = game.player.armor ? ITEM_DEFS[game.player.armor.kind] : null;
+      const rawDamage = Math.max(1, Math.round(enemy.attack * currentDifficulty().enemyAttackMultiplier));
+      const bonus = kind === "laser" ? 1 : 0;
+      const damage = Math.max(1, rawDamage + bonus - (armorDef?.defenseBonus || 0));
+      game.player.hp = Math.max(0, game.player.hp - damage);
+      if (kind === "laser") game.debug.bossLaserCount++;
+      World.pushFx(game, kind === "laser" ? "laser" : "shoot", game.player.x, game.player.y, { actorId: enemy.id, targetId: "player", fromX: enemy.x, fromY: enemy.y, damage });
+      systemSound(kind === "laser" ? "laser" : "shoot");
+      World.addLog(game, `${enemy.name}が${kind === "laser" ? "砲撃" : "射撃"}した。HP ${game.player.hp}/${game.player.maxHp}。`);
+      clearEnemyIntent(enemy);
+      if (game.player.hp <= 0 && onDeath) onDeath(kind === "laser" ? "発掘家は防衛機の砲撃で倒れた。Nキーで再開。" : "発掘家は旧軍の射撃で倒れた。Nキーで再開。");
+      return false;
+    }
+    if (manhattan(enemy.x, enemy.y, game.player.x, game.player.y) !== 1) {
+      if (visible) World.addLog(game, `${enemy.name}の攻撃予兆は空を切った。`);
+      clearEnemyIntent(enemy);
+      return false;
+    }
+    if (kind === "pounce" && visible) World.addLog(game, `${enemy.name}が飛びかかった。`);
+    else if (kind === "slash" && visible) World.addLog(game, `${enemy.name}が刃を振り下ろした。`);
+    attackPlayer(game, enemy, onDeath);
+    clearEnemyIntent(enemy);
+    return false;
+  }
+
   function enemyCanSeePlayer(game, enemy) {
     const dist = manhattan(enemy.x, enemy.y, game.player.x, game.player.y);
     const radius = enemy.type === "hunter" ? CONFIG.enemySightRadius + 2 : CONFIG.enemySightRadius;
@@ -689,10 +751,12 @@ const EnemySystem = (() => {
     if (!enemy || enemy.hp <= 0 || !World.isPlayerAlive(game)) return false;
     if (enemy.stun > 0) {
       enemy.stun--;
+      clearEnemyIntent(enemy);
       return false;
     }
     updateAwareness(game, enemy);
     if (enemy.state === "idle" && !game.lure) {
+      clearEnemyIntent(enemy);
       if (!chance(0.25)) return false;
       const options = randomPatrolOptions(game, enemy);
       if (!options.length) return false;
@@ -716,22 +780,19 @@ const EnemySystem = (() => {
         World.addLog(game, "中枢防衛機が周辺機械を再起動した。");
       }
     }
-    if (FEATURES.enemyAbilities && (enemy.type === "soldier" || enemy.type === "guardian") && lineShotPossible(game, enemy) && chance(enemy.type === "guardian" ? 0.7 : 0.55)) {
-      const armorDef = game.player.armor ? ITEM_DEFS[game.player.armor.kind] : null;
-    const rawDamage = Math.max(1, Math.round(enemy.attack * currentDifficulty().enemyAttackMultiplier));
-    const damage = Math.max(1, rawDamage - (armorDef?.defenseBonus || 0));
-    game.player.hp = Math.max(0, game.player.hp - damage);
-      game.debug.bossLaserCount += enemy.type === "guardian" ? 1 : 0;
-      World.pushFx(game, enemy.type === "guardian" ? "laser" : "shoot", game.player.x, game.player.y, { actorId: enemy.id, targetId: "player", fromX: enemy.x, fromY: enemy.y, damage });
-      systemSound(enemy.type === "guardian" ? "laser" : "shoot");
-      World.addLog(game, `${enemy.name}が射撃した。HP ${game.player.hp}/${game.player.maxHp}。`);
-      if (game.player.hp <= 0 && onDeath) onDeath("発掘家は旧軍の射撃で倒れた。Nキーで再開。");
+    if (enemy.intent) return executeEnemyIntent(game, enemy, onDeath);
+
+    const canShoot = FEATURES.enemyAbilities && (enemy.type === "soldier" || enemy.type === "guardian") && lineShotPossible(game, enemy) && chance(enemy.type === "guardian" ? 0.7 : 0.55);
+    if (canShoot) {
+      beginEnemyIntent(game, enemy, getEnemyIntentKind(enemy));
       return false;
     }
+
     if (manhattan(enemy.x, enemy.y, game.player.x, game.player.y) === 1) {
-      attackPlayer(game, enemy, onDeath);
+      beginEnemyIntent(game, enemy, getEnemyIntentKind(enemy));
       return false;
     }
+
     logisticsPickup(game, enemy);
     for (const pos of enemyMoveOptions(game, enemy)) {
       if (canEnemyMoveTo(game, enemy, pos.x, pos.y)) {
@@ -743,6 +804,7 @@ const EnemySystem = (() => {
         return true;
       }
     }
+    clearEnemyIntent(enemy);
     return tryDismantleWall(game, enemy);
   }
 
