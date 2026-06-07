@@ -1076,7 +1076,7 @@ kbd {
   .log { max-height: 30px; }
 }
 
-/* v17.5.1: in-screen translucent controls */
+/* v17.5.2: in-screen translucent controls */
 .game-stage {
   position: relative;
   min-width: 0;
@@ -1347,7 +1347,7 @@ kbd {
   }
 }
 
-/* v17.5.1: invisible 9-zone screen input, no arrow pad */
+/* v17.5.2: invisible 9-zone screen input, no arrow pad */
 .tap-zones {
   position: absolute;
   inset: 0;
@@ -1435,5 +1435,52 @@ kbd {
 
   .hud {
     bottom: calc(var(--mobile-controls-h) + max(8px, env(safe-area-inset-bottom)));
+  }
+}
+
+/* v17.5.2: strict invisible 3x3 tap grid. No on-canvas direction/action buttons. */
+.game-stage {
+  position: relative;
+  overflow: hidden;
+}
+
+.tap-zones {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  background: transparent;
+  opacity: 1;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  cursor: pointer;
+}
+
+.tap-zone {
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  background: transparent;
+  border: 0;
+  opacity: 0;
+}
+
+.controls-overlay,
+.dpad,
+.dbtn {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+@media (max-width: 760px) {
+  :root {
+    --mobile-controls-h: 0px;
+  }
+
+  .hud {
+    bottom: max(8px, env(safe-area-inset-bottom));
   }
 }

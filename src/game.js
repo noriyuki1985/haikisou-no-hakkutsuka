@@ -422,6 +422,17 @@ function createGameApp(elements) {
     }
   }
 
+  function centerTapAction() {
+    if (game.screen === "base") return talkAdjacentNpc();
+    if (game.screen === "run") {
+      if (!runInputAllowed()) return;
+      if (game.isGameOver || game.isClear) return endMessage();
+      if (World.getItemAt(game, game.player.x, game.player.y)) return pickupItemAtPlayer();
+      return waitTurn();
+    }
+    return startExploration();
+  }
+
   function useInventoryItem(index) {
     if (!runInputAllowed()) return;
     if (game.isGameOver || game.isClear) return endMessage();
@@ -843,6 +854,7 @@ function createGameApp(elements) {
     movePlayer,
     pickupItemAtPlayer,
     contextPickupOrUse,
+    centerTapAction,
     useInventoryItem,
     upgradeBase,
     cycleDifficulty,

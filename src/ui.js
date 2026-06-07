@@ -1853,7 +1853,7 @@ function createRenderer(elements) {
       appendLine(basePanel, "生活の残る固定集落。住人は焚き火と仕事場の間を歩き回る。", "selected-line");
       appendLine(basePanel, "中央の焚き火、左手の水場、右手の作業台と廃材置き場、東側の隔壁入口を見て回れる。");
       appendLine(basePanel, `浄水コア ${game.settlement.cores} / 発掘 ${game.settlement.runs} / 最深 ${game.settlement.bestDepth}`);
-      appendLine(basePanel, "会話: 住人にぶつかる / 1〜5", "muted-line");
+      appendLine(basePanel, "会話: 住人のいる方向へ進んでぶつかる", "muted-line");
       appendLine(basePanel, "入口に立つと演出付きで廃棄層へ進入", "muted-line");
       return;
     }
@@ -1984,10 +1984,10 @@ function createRenderer(elements) {
     if (game.helpOpen) {
       screenPanel.classList.add("compact-menu-screen");
       h.textContent = "ヘルプ / 操作説明";
-      appendPanelLine("スマホ: 画面を見えない9分割エリアとして扱う。押した位置の方向へ移動し、中央は足踏み。", "menu-line");
+      appendPanelLine("スマホ: キャンバス全体を見えない9分割エリアとして扱う。押した位置の方向へ移動し、中央は足踏み/足元の遺物取得。", "menu-line");
       appendPanelLine("NPCや敵のいる方向へ進むと、会話または攻撃を自動実行する。");
       appendPanelLine("PC: 矢印/WASDで移動、斜めはQ/E/Z/Cまたはテンキー、.で足踏み。");
-      appendPanelLine("拾う: G / 所持品: I / 選択: 1〜8または[ ] / 使用: U / 置く: X / 投げる: T / 調べる: F");
+      appendPanelLine("足元の遺物: 中央タップまたはG / 所持品: I / 選択: 1〜8または[ ] / 使用: U / 置く: X / 投げる: T / 調べる: F");
       appendPanelLine("拠点: B / 探索メニュー: M / 途中帰還: P / 記録: L / 新規発掘: N");
       appendPanelLine("目的: 深度5で防衛端末を停止し、中枢防衛機を止め、浄水コアを回収する。地図は歩いて開拓する。");
       appendButtons([{ label: "閉じる", cmd: "close" }]);
@@ -2227,16 +2227,26 @@ function bindTouch(app) {
   const tapZones = document.getElementById("tapZones");
   if (tapZones) {
     const handleTapZone = event => {
-      const rect = tapZones.getBoundingClientRect();
-      if (!rect.width || !rect.height) return;
-      const x = Math.max(0, Math.min(rect.width - 1, event.clientX - rect.left));
-      const y = Math.max(0, Math.min(rect.height - 1, event.clientY - rect.top));
-      const col = Math.max(0, Math.min(2, Math.floor((x / rect.width) * 3)));
-      const row = Math.max(0, Math.min(2, Math.floor((y / rect.height) * 3)));
-      const dx = col - 1;
-      const dy = row - 1;
+      let dx = 0;
+      let dy = 0;
+      const zone = event.target && event.target.closest ? event.target.closest("[data-tap-dir]") : null;
+      if (zone && tapZones.contains(zone)) {
+        const parts = String(zone.dataset.tapDir || "0,0").split(",").map(Number);
+        dx = Number.isFinite(parts[0]) ? Math.max(-1, Math.min(1, parts[0])) : 0;
+        dy = Number.isFinite(parts[1]) ? Math.max(-1, Math.min(1, parts[1])) : 0;
+      } else {
+        const rect = tapZones.getBoundingClientRect();
+        if (!rect.width || !rect.height) return;
+        const x = Math.max(0, Math.min(rect.width - 1, event.clientX - rect.left));
+        const y = Math.max(0, Math.min(rect.height - 1, event.clientY - rect.top));
+        const col = Math.max(0, Math.min(2, Math.floor((x / rect.width) * 3)));
+        const row = Math.max(0, Math.min(2, Math.floor((y / rect.height) * 3)));
+        dx = col - 1;
+        dy = row - 1;
+      }
       if (typeof AudioSystem !== "undefined") AudioSystem.unlock();
-      app.movePlayer(dx, dy);
+      if (dx === 0 && dy === 0 && app.centerTapAction) app.centerTapAction();
+      else app.movePlayer(dx, dy);
       event.preventDefault();
       event.stopPropagation();
     };
