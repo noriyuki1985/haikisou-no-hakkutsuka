@@ -1326,39 +1326,51 @@ function createRenderer(elements) {
     return true;
   }
 
-  function drawFloorReadabilityOverlay(game, px, py, t, visible) {
+  function isWalkableVisualTile(kind) {
+    return [TILE.FLOOR, TILE.LIFT, TILE.CORE, TILE.TERMINAL, TILE.POLLUTION, TILE.ENTRANCE].includes(kind);
+  }
+
+  function drawWalkabilityBrightnessOverlay(game, kind, px, py, t, visible) {
+    const walkable = isWalkableVisualTile(kind);
     ctx.save();
     if (game.screen === "base") {
-      ctx.strokeStyle = visible ? "rgba(220,192,148,0.08)" : "rgba(0,0,0,0.14)";
-      ctx.lineWidth = 1;
-      ctx.strokeRect(px + 0.5, py + 0.5, t - 1, t - 1);
-      ctx.fillStyle = visible ? "rgba(255,228,190,0.025)" : "rgba(0,0,0,0.04)";
-      ctx.fillRect(px + 1, py + 1, t - 2, t - 2);
+      if (walkable) {
+        ctx.fillStyle = visible ? "rgba(255,232,188,0.13)" : "rgba(255,232,188,0.055)";
+        ctx.fillRect(px, py, t, t);
+        ctx.strokeStyle = visible ? "rgba(255,246,218,0.14)" : "rgba(255,246,218,0.045)";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(px + 0.5, py + 0.5, t - 1, t - 1);
+      } else {
+        ctx.fillStyle = visible ? "rgba(0,0,0,0.36)" : "rgba(0,0,0,0.58)";
+        ctx.fillRect(px, py, t, t);
+        ctx.fillStyle = visible ? "rgba(50,36,26,0.10)" : "rgba(0,0,0,0.18)";
+        ctx.fillRect(px + 1, py + 1, t - 2, t - 2);
+      }
     } else {
-      ctx.strokeStyle = visible ? "rgba(98,162,176,0.12)" : "rgba(34,58,66,0.10)";
-      ctx.lineWidth = 1;
-      ctx.strokeRect(px + 0.5, py + 0.5, t - 1, t - 1);
-      ctx.strokeStyle = visible ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.08)";
-      ctx.beginPath();
-      ctx.moveTo(px + t * 0.20, py + t * 0.28);
-      ctx.lineTo(px + t * 0.80, py + t * 0.28);
-      ctx.moveTo(px + t * 0.20, py + t * 0.72);
-      ctx.lineTo(px + t * 0.80, py + t * 0.72);
-      ctx.stroke();
+      if (walkable) {
+        ctx.fillStyle = visible ? "rgba(150,220,235,0.11)" : "rgba(86,135,150,0.045)";
+        ctx.fillRect(px, py, t, t);
+        ctx.strokeStyle = visible ? "rgba(220,250,255,0.12)" : "rgba(110,150,160,0.04)";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(px + 0.5, py + 0.5, t - 1, t - 1);
+      } else {
+        ctx.fillStyle = visible ? "rgba(0,0,0,0.48)" : "rgba(0,0,0,0.70)";
+        ctx.fillRect(px, py, t, t);
+        ctx.fillStyle = visible ? "rgba(12,18,22,0.18)" : "rgba(0,0,0,0.22)";
+        ctx.fillRect(px + 1, py + 1, t - 2, t - 2);
+      }
     }
     ctx.restore();
   }
 
   function drawEnhancedTile(game, kind, px, py, t, visible) {
-    if (kind === TILE.FLOOR) {
-      drawFloorReadabilityOverlay(game, px, py, t, visible);
-      return;
-    }
+    drawWalkabilityBrightnessOverlay(game, kind, px, py, t, visible);
+    if (kind === TILE.FLOOR || kind === TILE.WALL) return;
     ctx.save();
     if (game.screen === "base") {
-      ctx.globalAlpha = kind === TILE.WALL ? 0.56 : kind === TILE.ENTRANCE ? 0.92 : 0.72;
+      ctx.globalAlpha = kind === TILE.ENTRANCE ? 0.92 : 0.68;
     } else {
-      ctx.globalAlpha = kind === TILE.WALL ? 0.90 : 0.96;
+      ctx.globalAlpha = 0.88;
     }
     Visuals.tile(ctx, kind, px, py, t, visible);
     ctx.restore();

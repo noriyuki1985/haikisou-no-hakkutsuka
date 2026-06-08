@@ -1,6 +1,6 @@
 // --- config.js ---
-const VERSION = "v17.5.4";
-const FEATURE_LEVEL = 1754;
+const VERSION = "v17.5.5";
+const FEATURE_LEVEL = 1755;
 
 const FEATURES = {
   items: true,
