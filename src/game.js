@@ -165,13 +165,43 @@ function createGameApp(elements) {
     return false;
   }
 
+  function settlementEntrancePos() {
+    return game.settlementEntrance || { x: 42, y: 16 };
+  }
+
+  function playerAtSettlementEntrance() {
+    const ent = settlementEntrancePos();
+    return game.screen === "base" && game.player.x === ent.x && game.player.y === ent.y;
+  }
+
+  function playerNearSettlementEntrance(radius = 3) {
+    const ent = settlementEntrancePos();
+    return game.screen === "base" && chebyshev(game.player.x, game.player.y, ent.x, ent.y) <= radius;
+  }
+
+  function updateEntranceGuidanceAfterMove() {
+    if (!FEATURES.settlement || game.screen !== "base") return;
+    if (playerAtSettlementEntrance()) {
+      game.entrancePromptShown = true;
+      World.addLog(game, "廃棄層入口。中央タップで隔壁を開ける。 ");
+      return;
+    }
+    if (!game.entranceHintShown && playerNearSettlementEntrance(4)) {
+      game.entranceHintShown = true;
+      World.addLog(game, "東の隔壁が近い。入口に立ち、中央タップで廃棄層へ入る。 ");
+    }
+  }
+
   function talkAdjacentNpc() {
     if (game.screen !== "base") return false;
+    if (playerAtSettlementEntrance()) return enterDungeonFromSettlement();
     const npc = SettlementSystem.adjacentNpc(game);
     if (!npc) {
-      const ent = game.settlementEntrance || { x: 43, y: 16 };
-      if (game.player.x === ent.x && game.player.y === ent.y) return enterDungeonFromSettlement();
-      World.addLog(game, "近くに話せる相手はいない。 ");
+      if (playerNearSettlementEntrance(4)) {
+        World.addLog(game, "廃棄層へ入るには、入口マスに立って中央をタップする。 ");
+      } else {
+        World.addLog(game, "近くに話せる相手はいない。 ");
+      }
       render();
       return true;
     }
@@ -204,7 +234,11 @@ function createGameApp(elements) {
     game.player.x = nextX;
     game.player.y = nextY;
     playSound("move");
-    if (SettlementSystem.isEntrance(game, game.player.x, game.player.y)) return enterDungeonFromSettlement();
+    updateEntranceGuidanceAfterMove();
+    if (playerAtSettlementEntrance()) {
+      render();
+      return;
+    }
     SettlementSystem.stepNpcs(game);
     render();
   }
@@ -409,7 +443,8 @@ function createGameApp(elements) {
 
   function contextPickupOrUse() {
     if (game.screen === "base") {
-      World.addLog(game, "住人のいる方向へ進むと会話できる。 ");
+      if (playerAtSettlementEntrance()) return enterDungeonFromSettlement();
+      World.addLog(game, "住人のいる方向へ進むと会話。入口に立つと中央タップで廃棄層へ入る。 ");
       render();
       return;
     }
@@ -555,8 +590,8 @@ function createGameApp(elements) {
     SettlementSystem.generate(game);
     World.recordCodex(game, "world:waste-zone", "再構成廃棄区域", "AIが作り、壊し、捨て続ける区域。人類はそこから文明の残骸を拾っている。 ");
     World.recordCodex(game, "world:mission", "発掘家の目的", "集落から廃棄層入口へ行き、再構成される内部で浄水コアを探す。 ");
-    World.recordCodex(game, "world:settlement", "外縁集落", "構造が固定された生活圏。水守り、老発掘家、修理屋、見張り、記録係が歩いている。 ");
-    World.addLog(game, "外縁集落。東の廃棄層入口へ向かう。住人にぶつかると会話できる。 ");
+    World.recordCodex(game, "world:settlement", "外縁集落", "東の隔壁から廃棄層へ入る生活圏。水守り、老発掘家、修理屋、見張り、記録係がいる。 ");
+    World.addLog(game, "外縁集落。東の隔壁が廃棄層入口。住人にぶつかると話を聞ける。 ");
     render();
   }
 
@@ -592,9 +627,9 @@ function createGameApp(elements) {
       return render();
     }
     if (game.screen === "base") {
-      const ent = game.settlementEntrance || { x: 43, y: 16 };
+      const ent = game.settlementEntrance || { x: 42, y: 16 };
       if (game.player.x === ent.x && game.player.y === ent.y) return enterDungeonFromSettlement();
-      World.addLog(game, "廃棄層へ入るには、集落東側の入口まで歩く。 ");
+      World.addLog(game, "廃棄層へ入るには、東側の入口に立って中央タップ。 ");
       return render();
     }
     if (game.screen !== "run") {

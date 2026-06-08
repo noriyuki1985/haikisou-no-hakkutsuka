@@ -91,11 +91,11 @@ const Visuals = (() => {
   };
 
   const NPC_PORTRAIT_META = {
-    water_keeper: { title: "水守", role: "濾過槽と給水の番人", place: "水場の脇で配水を見守っている", note: "水の濁りや配給量に敏感。静かだが周囲をよく見ている。" },
-    old_digger: { title: "老発掘家", role: "拾得物の目利き", place: "寝床と焚き火の近くに腰を下ろす", note: "昔話が長い。危ない区画ほど覚えている。" },
-    mechanic: { title: "修理屋", role: "工具と発電機の整備担当", place: "作業台と廃材置き場を行き来する", note: "口は悪いが手は確か。使える部品を見ると黙れない。" },
-    lookout: { title: "見張り", role: "外縁警戒", place: "見張り台から外を睨んでいる", note: "入口周辺の異音にすぐ反応する。" },
-    recorder: { title: "記録係", role: "回収記録と日報の整理", place: "記録小屋で帳面を抱えている", note: "淡々としているが、誰がどこへ行ったか全部覚えている。" }
+    water_keeper: { title: "水守", role: "水場と濾過槽の管理者", place: "水場の脇で配水を見守っている", note: "水の濁りに敏感。無理な発掘より、生きて戻ることを重く見る。" },
+    old_digger: { title: "老発掘家", role: "引退した発掘家", place: "焚き火の近くで古い装備を磨いている", note: "口数は少ないが、危ない道と戻る判断だけは外さない。" },
+    mechanic: { title: "修理屋", role: "工具と端末の整備担当", place: "工房で壊れた端末を叩いている", note: "道具を信用しすぎない。だが使えるものは全部使う。" },
+    lookout: { title: "見張り", role: "入口の監視役", place: "東の隔壁と見張り台を行き来している", note: "廃棄層の音と振動を聞き分ける。異変に気づくのが早い。" },
+    recorder: { title: "記録係", role: "発掘記録の管理者", place: "記録小屋で帳面を抱えている", note: "感情は薄いが、誰がどこで戻ったかを全部残している。" }
   };
 
   const ANIM_PROFILES = {
@@ -1335,11 +1335,19 @@ function createRenderer(elements) {
     ctx.save();
     if (game.screen === "base") {
       if (walkable) {
-        ctx.fillStyle = visible ? "rgba(255,232,188,0.13)" : "rgba(255,232,188,0.055)";
-        ctx.fillRect(px, py, t, t);
-        ctx.strokeStyle = visible ? "rgba(255,246,218,0.14)" : "rgba(255,246,218,0.045)";
-        ctx.lineWidth = 1;
-        ctx.strokeRect(px + 0.5, py + 0.5, t - 1, t - 1);
+        if (kind === TILE.ENTRANCE) {
+          ctx.fillStyle = visible ? "rgba(255,205,118,0.28)" : "rgba(255,205,118,0.12)";
+          ctx.fillRect(px - 1, py - 1, t + 2, t + 2);
+          ctx.strokeStyle = visible ? "rgba(255,238,178,0.55)" : "rgba(255,238,178,0.18)";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(px + 1, py + 1, t - 2, t - 2);
+        } else {
+          ctx.fillStyle = visible ? "rgba(255,232,188,0.13)" : "rgba(255,232,188,0.055)";
+          ctx.fillRect(px, py, t, t);
+          ctx.strokeStyle = visible ? "rgba(255,246,218,0.14)" : "rgba(255,246,218,0.045)";
+          ctx.lineWidth = 1;
+          ctx.strokeRect(px + 0.5, py + 0.5, t - 1, t - 1);
+        }
       } else {
         ctx.fillStyle = visible ? "rgba(0,0,0,0.36)" : "rgba(0,0,0,0.58)";
         ctx.fillRect(px, py, t, t);
@@ -1456,21 +1464,77 @@ function createRenderer(elements) {
         ctx.strokeStyle = "rgba(150,120,90,0.36)";
         ctx.strokeRect(px + 1, py + 1, ww - 2, hh - 2);
       } else if (prop.type === "gate") {
-        ctx.fillStyle = "rgba(46,42,44,0.60)";
+        ctx.globalAlpha = 0.86;
+        ctx.fillStyle = "rgba(46,42,44,0.62)";
         ctx.fillRect(px, py, ww, hh);
-        ctx.strokeStyle = "rgba(194,166,112,0.48)";
-        ctx.lineWidth = 2;
+        ctx.fillStyle = `rgba(255,204,112,${0.06 + pulse * 0.08})`;
+        ctx.fillRect(px - t * 0.45, py - t * 0.30, ww + t * 0.90, hh + t * 0.60);
+        ctx.strokeStyle = `rgba(255,222,154,${0.58 + pulse * 0.24})`;
+        ctx.lineWidth = 3;
         ctx.strokeRect(px + 2, py + 2, ww - 4, hh - 4);
+        ctx.strokeStyle = "rgba(82,58,38,0.88)";
+        ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(px + ww * 0.5, py + 3);
         ctx.lineTo(px + ww * 0.5, py + hh - 3);
         ctx.stroke();
       } else if (prop.type === "door") {
-        ctx.fillStyle = "rgba(214,184,118,0.88)";
-        ctx.fillRect(px + 6, py + 4, t - 12, t - 8);
+        ctx.globalAlpha = 0.96;
+        ctx.fillStyle = `rgba(255,208,125,${0.78 + pulse * 0.18})`;
+        ctx.fillRect(px + 5, py + 3, t - 10, t - 6);
+        ctx.strokeStyle = "rgba(255,245,190,0.72)";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(px + 5, py + 3, t - 10, t - 6);
       }
       ctx.restore();
     }
+  }
+
+  function drawSettlementEntranceGuide(game, toScreen, t, now) {
+    if (game.screen !== "base") return;
+    const ent = game.settlementEntrance || { x: 42, y: 16 };
+    const pulse = 0.5 + 0.5 * Math.sin((now || 0) / 260);
+    const dist = chebyshev(game.player.x, game.player.y, ent.x, ent.y);
+    const near = dist <= 4;
+    const atEntrance = dist === 0;
+    const s = toScreen(ent.x, ent.y);
+    const cx = s.px + t * 0.5;
+    const cy = s.py + t * 0.5;
+
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.fillStyle = `rgba(255,196,92,${0.10 + pulse * 0.10})`;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, t * (near ? 2.4 : 1.6), t * (near ? 1.4 : 1.0), 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = atEntrance ? "rgba(255,248,190,0.96)" : `rgba(255,214,132,${0.46 + pulse * 0.32})`;
+    ctx.lineWidth = atEntrance ? 4 : 3;
+    ctx.strokeRect(s.px - t * 0.08, s.py - t * 0.08, t * 1.16, t * 1.16);
+    ctx.restore();
+
+    const label = atEntrance ? "中央タップで入る" : near ? "廃棄層入口" : "廃棄層入口";
+    const sub = atEntrance ? "隔壁を開放" : near ? "入口に立つ" : "東の隔壁";
+    const labelW = Math.max(t * 2.9, 112);
+    const labelH = near || atEntrance ? 42 : 30;
+    const lx = clamp(cx - labelW / 2, 4, view.cols * t - labelW - 4);
+    const ly = clamp(s.py - labelH - t * 0.25, 6, view.rows * t - labelH - 6);
+    ctx.save();
+    ctx.fillStyle = "rgba(18,14,10,0.84)";
+    ctx.fillRect(lx, ly, labelW, labelH);
+    ctx.strokeStyle = atEntrance ? "rgba(255,238,164,0.88)" : "rgba(222,184,108,0.68)";
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(lx + 0.5, ly + 0.5, labelW - 1, labelH - 1);
+    ctx.fillStyle = "rgba(255,238,198,0.96)";
+    ctx.font = `bold ${Math.max(12, Math.floor(t * 0.28))}px system-ui`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, lx + labelW / 2, ly + (near || atEntrance ? 14 : labelH / 2));
+    if (near || atEntrance) {
+      ctx.fillStyle = "rgba(226,210,176,0.86)";
+      ctx.font = `${Math.max(10, Math.floor(t * 0.21))}px system-ui`;
+      ctx.fillText(sub, lx + labelW / 2, ly + 31);
+    }
+    ctx.restore();
   }
 
   function getIntentVisual(enemy) {
@@ -1659,6 +1723,7 @@ function createRenderer(elements) {
     const toScreen = (gx, gy) => ({ px: (gx - camX) * t, py: (gy - camY) * t });
 
     drawSettlementProps(game, toScreen, t, now);
+    drawSettlementEntranceGuide(game, toScreen, t, now);
 
     for (const trap of game.traps) {
       if (!trap.active || !trap.discovered) continue;
@@ -1792,13 +1857,16 @@ function createRenderer(elements) {
     if (versionText) versionText.textContent = `Version: ${VERSION}`;
     const state = game.isClear ? " / CLEAR" : game.isGameOver ? " / GAME OVER" : game.isReturned ? " / RETURNED" : "";
     if (game.screen === "base") {
-      const ent = game.settlementEntrance || { x: 43, y: 16 };
+      const ent = game.settlementEntrance || { x: 42, y: 16 };
       const atEntrance = game.player.x === ent.x && game.player.y === ent.y;
+      const nearEntrance = chebyshev(game.player.x, game.player.y, ent.x, ent.y) <= 4;
       statusText.textContent = game.transition?.type === "entrance"
         ? "外縁集落｜隔壁通過シーケンス進行中"
         : atEntrance
-          ? "外縁集落｜廃棄層入口：進入演出を開始"
-          : "外縁集落｜住人に話しかけられる生活空間｜東の廃棄層入口へ向かう";
+          ? "外縁集落｜廃棄層入口：中央タップで進入"
+          : nearEntrance
+            ? "外縁集落｜廃棄層入口付近：入口に立って中央タップ"
+            : "外縁集落｜住人に話しかけられる生活空間｜東の廃棄層入口へ向かう";
       if (debugText) debugText.textContent = `debug: ${view.mode} ${view.cols}x${view.rows} dpr${view.dpr} / settlement turn ${game.settlementTurn || 0} / npc ${(game.npcs || []).length} / fx ${Array.isArray(game.fx) ? game.fx.length : 0}`;
       return;
     }
@@ -1877,7 +1945,7 @@ function createRenderer(elements) {
       appendLine(basePanel, "中央の焚き火、左手の水場、右手の作業台と廃材置き場、東側の隔壁入口を見て回れる。");
       appendLine(basePanel, `浄水コア ${game.settlement.cores} / 発掘 ${game.settlement.runs} / 最深 ${game.settlement.bestDepth}`);
       appendLine(basePanel, "会話: 住人のいる方向へ進んでぶつかる", "muted-line");
-      appendLine(basePanel, "入口に立つと演出付きで廃棄層へ進入", "muted-line");
+      appendLine(basePanel, "入口に立って中央タップで廃棄層へ進入", "muted-line");
       return;
     }
     const floorEvent = FLOOR_EVENT_DEFS[game.floorEvent]?.name || "通常稼働";
@@ -2074,7 +2142,7 @@ function createRenderer(elements) {
     if (game.screen === "base") {
       screenPanel.classList.add("base-screen", "base-menu-screen", "settlement-screen");
       h.textContent = "外縁集落";
-      appendPanelLine("AIが作り捨てる廃棄層の外側。住人のいる方向へ進むと会話できる。目的を確認してから発掘へ向かう。", "menu-line");
+      appendPanelLine("東の隔壁の先が廃棄層。住人にぶつかると会話できる。まず目的を聞いてから潜る。", "menu-line");
       appendPanelLine(`浄水コア ${game.settlement.cores} / 発掘 ${game.settlement.runs} / 最深 ${game.settlement.bestDepth}`, "muted-line");
       appendPanelLine("行動", "section-line");
       appendButtons([
