@@ -397,13 +397,13 @@ kbd {
 .screen-panel.title-screen {
   background-image:
     linear-gradient(90deg, rgba(3,7,12,0.90), rgba(5,12,18,0.68) 48%, rgba(2,4,7,0.88)),
-    url("assets/backgrounds/title.png?v=17.5.7");
+    url("assets/backgrounds/title.png?v=17.5.10");
 }
 
 .screen-panel.base-screen {
   background-image:
     linear-gradient(90deg, rgba(4,8,10,0.92), rgba(8,18,16,0.68) 50%, rgba(3,5,7,0.88)),
-    url("assets/backgrounds/base.png?v=17.5.7");
+    url("assets/backgrounds/base.png?v=17.5.10");
 }
 
 .screen-panel.loading-screen {
@@ -469,7 +469,7 @@ kbd {
 .screen-panel.npc-screen {
   background-image:
     linear-gradient(90deg, rgba(5,10,14,0.96), rgba(8,18,20,0.86)),
-    url("assets/backgrounds/base.png?v=17.5.7");
+    url("assets/backgrounds/base.png?v=17.5.10");
   background-size: cover;
   background-position: center;
 }
@@ -477,7 +477,7 @@ kbd {
 .screen-panel.story-screen {
   background-image:
     linear-gradient(90deg, rgba(3,7,12,0.96), rgba(9,16,22,0.86)),
-    url("assets/backgrounds/title.png?v=17.5.7");
+    url("assets/backgrounds/title.png?v=17.5.10");
   background-size: cover;
   background-position: center;
 }
@@ -1076,7 +1076,7 @@ kbd {
   .log { max-height: 30px; }
 }
 
-/* v17.5.7: in-screen translucent controls */
+/* v17.5.10: in-screen translucent controls */
 .game-stage {
   position: relative;
   min-width: 0;
@@ -1347,7 +1347,7 @@ kbd {
   }
 }
 
-/* v17.5.7: invisible 9-zone screen input, no arrow pad */
+/* v17.5.10: invisible 9-zone screen input, no arrow pad */
 .tap-zones {
   position: absolute;
   inset: 0;
@@ -1438,7 +1438,7 @@ kbd {
   }
 }
 
-/* v17.5.7: strict invisible 3x3 tap grid. No on-canvas direction/action buttons. */
+/* v17.5.10: strict invisible 3x3 tap grid. No on-canvas direction/action buttons. */
 .game-stage {
   position: relative;
   overflow: hidden;
@@ -1485,7 +1485,7 @@ kbd {
   }
 }
 
-/* v17.5.7: mobile zoom suppression for full-screen tap controls */
+/* v17.5.10: mobile zoom suppression for full-screen tap controls */
 html,
 body,
 .game,

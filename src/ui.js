@@ -1497,6 +1497,7 @@ function createRenderer(elements) {
     const dist = chebyshev(game.player.x, game.player.y, ent.x, ent.y);
     const near = dist <= 4;
     const atEntrance = dist === 0;
+    const entranceZone = atEntrance || ((Math.abs(game.player.x - ent.x) <= 1 && Math.abs(game.player.y - ent.y) <= 1) || (game.player.x >= ent.x - 2 && game.player.x <= ent.x && game.player.y === ent.y));
     const s = toScreen(ent.x, ent.y);
     const cx = s.px + t * 0.5;
     const cy = s.py + t * 0.5;
@@ -1507,29 +1508,29 @@ function createRenderer(elements) {
     ctx.beginPath();
     ctx.ellipse(cx, cy, t * (near ? 2.4 : 1.6), t * (near ? 1.4 : 1.0), 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = atEntrance ? "rgba(255,248,190,0.96)" : `rgba(255,214,132,${0.46 + pulse * 0.32})`;
-    ctx.lineWidth = atEntrance ? 4 : 3;
+    ctx.strokeStyle = entranceZone ? "rgba(255,248,190,0.96)" : `rgba(255,214,132,${0.46 + pulse * 0.32})`;
+    ctx.lineWidth = entranceZone ? 4 : 3;
     ctx.strokeRect(s.px - t * 0.08, s.py - t * 0.08, t * 1.16, t * 1.16);
     ctx.restore();
 
-    const label = atEntrance ? "中央タップで入る" : near ? "廃棄層入口" : "廃棄層入口";
-    const sub = atEntrance ? "隔壁を開放" : near ? "入口に立つ" : "東の隔壁";
+    const label = entranceZone ? "入口へ進む" : near ? "廃棄層入口" : "廃棄層入口";
+    const sub = entranceZone ? "隔壁を開放" : near ? "入口へ進む" : "東の隔壁";
     const labelW = Math.max(t * 2.9, 112);
-    const labelH = near || atEntrance ? 42 : 30;
+    const labelH = near || entranceZone ? 42 : 30;
     const lx = clamp(cx - labelW / 2, 4, view.cols * t - labelW - 4);
     const ly = clamp(s.py - labelH - t * 0.25, 6, view.rows * t - labelH - 6);
     ctx.save();
     ctx.fillStyle = "rgba(18,14,10,0.84)";
     ctx.fillRect(lx, ly, labelW, labelH);
-    ctx.strokeStyle = atEntrance ? "rgba(255,238,164,0.88)" : "rgba(222,184,108,0.68)";
+    ctx.strokeStyle = entranceZone ? "rgba(255,238,164,0.88)" : "rgba(222,184,108,0.68)";
     ctx.lineWidth = 1.5;
     ctx.strokeRect(lx + 0.5, ly + 0.5, labelW - 1, labelH - 1);
     ctx.fillStyle = "rgba(255,238,198,0.96)";
     ctx.font = `bold ${Math.max(12, Math.floor(t * 0.28))}px system-ui`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(label, lx + labelW / 2, ly + (near || atEntrance ? 14 : labelH / 2));
-    if (near || atEntrance) {
+    ctx.fillText(label, lx + labelW / 2, ly + (near || entranceZone ? 14 : labelH / 2));
+    if (near || entranceZone) {
       ctx.fillStyle = "rgba(226,210,176,0.86)";
       ctx.font = `${Math.max(10, Math.floor(t * 0.21))}px system-ui`;
       ctx.fillText(sub, lx + labelW / 2, ly + 31);
@@ -1858,14 +1859,14 @@ function createRenderer(elements) {
     const state = game.isClear ? " / CLEAR" : game.isGameOver ? " / GAME OVER" : game.isReturned ? " / RETURNED" : "";
     if (game.screen === "base") {
       const ent = game.settlementEntrance || { x: 42, y: 16 };
-      const atEntrance = game.player.x === ent.x && game.player.y === ent.y;
+      const entranceZone = ((Math.abs(game.player.x - ent.x) <= 1 && Math.abs(game.player.y - ent.y) <= 1) || (game.player.x >= ent.x - 2 && game.player.x <= ent.x && game.player.y === ent.y));
       const nearEntrance = chebyshev(game.player.x, game.player.y, ent.x, ent.y) <= 4;
       statusText.textContent = game.transition?.type === "entrance"
         ? "外縁集落｜隔壁通過シーケンス進行中"
-        : atEntrance
-          ? "外縁集落｜廃棄層入口：中央タップで進入"
+        : entranceZone
+          ? "外縁集落｜廃棄層入口：入口へ進むと進入"
           : nearEntrance
-            ? "外縁集落｜廃棄層入口付近：入口に立って中央タップ"
+            ? "外縁集落｜廃棄層入口付近：入口へ進む"
             : "外縁集落｜住人に話しかけられる生活空間｜東の廃棄層入口へ向かう";
       if (debugText) debugText.textContent = `debug: ${view.mode} ${view.cols}x${view.rows} dpr${view.dpr} / settlement turn ${game.settlementTurn || 0} / npc ${(game.npcs || []).length} / fx ${Array.isArray(game.fx) ? game.fx.length : 0}`;
       return;
@@ -1945,7 +1946,7 @@ function createRenderer(elements) {
       appendLine(basePanel, "中央の焚き火、左手の水場、右手の作業台と廃材置き場、東側の隔壁入口を見て回れる。");
       appendLine(basePanel, `浄水コア ${game.settlement.cores} / 発掘 ${game.settlement.runs} / 最深 ${game.settlement.bestDepth}`);
       appendLine(basePanel, "会話: 住人のいる方向へ進んでぶつかる", "muted-line");
-      appendLine(basePanel, "入口に立って中央タップで廃棄層へ進入", "muted-line");
+      appendLine(basePanel, "入口へ向かって進むと廃棄層へ進入", "muted-line");
       return;
     }
     const floorEvent = FLOOR_EVENT_DEFS[game.floorEvent]?.name || "通常稼働";

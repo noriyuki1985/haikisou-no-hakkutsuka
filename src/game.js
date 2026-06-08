@@ -7,6 +7,15 @@ function createGameApp(elements) {
   const renderer = createRenderer(elements);
   const game = GameState.createInitialGame();
 
+  // 廃棄層入口の隔壁通過シーケンス用タイマー。
+  // v17.5.10: 入口遷移時の未定義参照を防ぎ、再開始時に残タイマーを消す。
+  const transitionTimers = [];
+  function clearTransitionTimers() {
+    while (transitionTimers.length) {
+      clearTimeout(transitionTimers.pop());
+    }
+  }
+
   function render() {
     renderer.render(game);
   }
@@ -174,6 +183,24 @@ function createGameApp(elements) {
     return game.screen === "base" && game.player.x === ent.x && game.player.y === ent.y;
   }
 
+  function playerInSettlementEntranceZone() {
+    if (game.screen !== "base") return false;
+    const ent = settlementEntrancePos();
+    const dx = Math.abs(game.player.x - ent.x);
+    const dy = Math.abs(game.player.y - ent.y);
+    return (dx <= 1 && dy <= 1) || (game.player.x >= ent.x - 2 && game.player.x <= ent.x && game.player.y === ent.y);
+  }
+
+  function shouldEnterSettlementEntranceByMove(dx, dy, nextX, nextY) {
+    if (game.screen !== "base") return false;
+    if (dx === 0 && dy === 0) return false;
+    const ent = settlementEntrancePos();
+    if (nextX === ent.x && nextY === ent.y) return true;
+    if (game.player.x === ent.x && game.player.y === ent.y && dx > 0) return true;
+    if (playerInSettlementEntranceZone() && dx > 0 && Math.abs(nextY - ent.y) <= 1) return true;
+    return false;
+  }
+
   function playerNearSettlementEntrance(radius = 3) {
     const ent = settlementEntrancePos();
     return game.screen === "base" && chebyshev(game.player.x, game.player.y, ent.x, ent.y) <= radius;
@@ -181,24 +208,24 @@ function createGameApp(elements) {
 
   function updateEntranceGuidanceAfterMove() {
     if (!FEATURES.settlement || game.screen !== "base") return;
-    if (playerAtSettlementEntrance()) {
+    if (playerInSettlementEntranceZone()) {
       game.entrancePromptShown = true;
-      World.addLog(game, "廃棄層入口。中央タップで隔壁を開ける。 ");
+      World.addLog(game, "廃棄層入口。入口へ向かって進むと隔壁を開ける。 ");
       return;
     }
     if (!game.entranceHintShown && playerNearSettlementEntrance(4)) {
       game.entranceHintShown = true;
-      World.addLog(game, "東の隔壁が近い。入口に立ち、中央タップで廃棄層へ入る。 ");
+      World.addLog(game, "東の隔壁が近い。入口へ向かって進むと廃棄層へ入る。 ");
     }
   }
 
   function talkAdjacentNpc() {
     if (game.screen !== "base") return false;
-    if (playerAtSettlementEntrance()) return enterDungeonFromSettlement();
+    if (playerInSettlementEntranceZone()) return enterDungeonFromSettlement();
     const npc = SettlementSystem.adjacentNpc(game);
     if (!npc) {
       if (playerNearSettlementEntrance(4)) {
-        World.addLog(game, "廃棄層へ入るには、入口マスに立って中央をタップする。 ");
+        World.addLog(game, "廃棄層へ入るには、入口へ向かって進む。 ");
       } else {
         World.addLog(game, "近くに話せる相手はいない。 ");
       }
@@ -218,6 +245,9 @@ function createGameApp(elements) {
     const nextX = game.player.x + dx;
     const nextY = game.player.y + dy;
     game.player.lastDir = { x: dx, y: dy };
+    if (shouldEnterSettlementEntranceByMove(dx, dy, nextX, nextY)) {
+      return enterDungeonFromSettlement();
+    }
     if (!World.isWalkable(game, nextX, nextY)) {
       World.addLog(game, "集落の壁や廃材に進路を阻まれた。 ");
       render();
@@ -404,6 +434,9 @@ function createGameApp(elements) {
     const nextX = game.player.x + dx;
     const nextY = game.player.y + dy;
     game.player.lastDir = { x: dx, y: dy };
+    if (shouldEnterSettlementEntranceByMove(dx, dy, nextX, nextY)) {
+      return enterDungeonFromSettlement();
+    }
     if (!World.isWalkable(game, nextX, nextY)) {
       World.addLog(game, "壁や廃材に進路を阻まれた。 ");
       render();
@@ -443,8 +476,8 @@ function createGameApp(elements) {
 
   function contextPickupOrUse() {
     if (game.screen === "base") {
-      if (playerAtSettlementEntrance()) return enterDungeonFromSettlement();
-      World.addLog(game, "住人のいる方向へ進むと会話。入口に立つと中央タップで廃棄層へ入る。 ");
+      if (playerInSettlementEntranceZone()) return enterDungeonFromSettlement();
+      World.addLog(game, "住人のいる方向へ進むと会話。入口へ向かって進むと廃棄層へ入る。 ");
       render();
       return;
     }
@@ -458,7 +491,11 @@ function createGameApp(elements) {
   }
 
   function centerTapAction() {
-    if (game.screen === "base") return talkAdjacentNpc();
+    if (game.screen === "base") {
+      if (baseInputBlocked()) return;
+      if (playerInSettlementEntranceZone()) return enterDungeonFromSettlement();
+      return talkAdjacentNpc();
+    }
     if (game.screen === "run") {
       if (!runInputAllowed()) return;
       if (game.isGameOver || game.isClear) return endMessage();
@@ -627,9 +664,8 @@ function createGameApp(elements) {
       return render();
     }
     if (game.screen === "base") {
-      const ent = game.settlementEntrance || { x: 42, y: 16 };
-      if (game.player.x === ent.x && game.player.y === ent.y) return enterDungeonFromSettlement();
-      World.addLog(game, "廃棄層へ入るには、東側の入口に立って中央タップ。 ");
+      if (playerInSettlementEntranceZone()) return enterDungeonFromSettlement();
+      World.addLog(game, "廃棄層へ入るには、東側の入口へ向かって進む。 ");
       return render();
     }
     if (game.screen !== "run") {
