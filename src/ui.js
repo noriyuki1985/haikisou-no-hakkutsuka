@@ -114,20 +114,33 @@ const Visuals = (() => {
   };
 
   const SPRITES = {};
+  const ASSET_VERSION = typeof VERSION !== "undefined" ? String(VERSION) : "dev";
   const ASSET_STATE = { total: 0, loaded: 0, failed: 0, failedKeys: [], startedAt: Date.now() };
+
+  function withAssetVersion(src) {
+    const sep = String(src).includes("?") ? "&" : "?";
+    return `${src}${sep}v=${encodeURIComponent(ASSET_VERSION)}`;
+  }
+
+  function notifyAssetProgress() {
+    if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+      try { window.dispatchEvent(new CustomEvent("haikiso:asset-progress")); } catch (_) {}
+    }
+  }
 
   function registerSprite(key, src) {
     ASSET_STATE.total++;
     if (typeof Image === "undefined") {
       ASSET_STATE.failed++;
       ASSET_STATE.failedKeys.push(key);
+      notifyAssetProgress();
       return;
     }
     const img = new Image();
     img.decoding = "async";
-    img.onload = () => { ASSET_STATE.loaded++; };
-    img.onerror = () => { ASSET_STATE.failed++; ASSET_STATE.failedKeys.push(key); };
-    img.src = src;
+    img.onload = () => { ASSET_STATE.loaded++; notifyAssetProgress(); };
+    img.onerror = () => { ASSET_STATE.failed++; ASSET_STATE.failedKeys.push(key); notifyAssetProgress(); };
+    img.src = withAssetVersion(src);
     SPRITES[key] = img;
   }
 
@@ -141,15 +154,13 @@ const Visuals = (() => {
 
   function assetStatus() {
     const done = ASSET_STATE.loaded + ASSET_STATE.failed;
-    const elapsed = Date.now() - ASSET_STATE.startedAt;
-    const timedOut = elapsed > 4000;
     return {
       total: ASSET_STATE.total,
       loaded: ASSET_STATE.loaded,
       failed: ASSET_STATE.failed,
       done,
-      ready: done >= ASSET_STATE.total || timedOut,
-      timedOut,
+      ready: done >= ASSET_STATE.total,
+      timedOut: false,
       ratio: ASSET_STATE.total ? Math.min(1, done / ASSET_STATE.total) : 1,
       failedKeys: [...ASSET_STATE.failedKeys]
     };
@@ -1054,7 +1065,7 @@ function createRenderer(elements) {
     imgWrap.className = "npc-portrait-card__image";
     const img = document.createElement("img");
     img.alt = meta.title;
-    img.src = asset?.src || `assets/characters/${spriteKey}.png`;
+    img.src = asset?.src || `assets/characters/${spriteKey}.png?v=${encodeURIComponent(typeof VERSION !== "undefined" ? VERSION : "dev")}`;
     imgWrap.appendChild(img);
     const body = document.createElement("div");
     body.className = "npc-portrait-card__body";
@@ -1911,7 +1922,7 @@ function createRenderer(elements) {
     screenPanel.className = "screen-panel";
     const asset = Visuals.assetStatus ? Visuals.assetStatus() : { ready: true, total: 0, loaded: 0, failed: 0, done: 0, ratio: 1, failedKeys: [] };
     const ended = game.screen === "run" && (game.isGameOver || game.isClear);
-    const active = !asset.ready || game.helpOpen || game.tutorialOpen || game.storyOpen || game.endingOpen || game.runRecordOpen || game.runMenuOpen || game.inventoryOpen || game.npcDialog || ended || game.screen === "title";
+    const active = !asset.ready || game.helpOpen || game.tutorialOpen || game.storyOpen || game.endingOpen || game.runRecordOpen || game.inventoryOpen || game.npcDialog || ended || game.screen === "title";
     screenPanel.hidden = !active;
     if (!active) return;
 
@@ -1922,7 +1933,7 @@ function createRenderer(elements) {
       screenPanel.classList.add("loading-screen");
       h.textContent = "旧文明データを読込中";
       appendPanelLine(`画像アセット ${asset.done}/${asset.total} 読み込み中。`, "menu-line");
-      appendPanelLine("読み込みが長引く場合も約4秒後に自動で開始し、未読込画像はCanvas描画へフォールバックする。", "muted-line");
+      appendPanelLine("読み込み完了後に開始する。古いプレースホルダー表示は出さない。", "muted-line");
       const bar = document.createElement("div");
       bar.className = "asset-load-bar";
       const fill = document.createElement("span");
@@ -2128,6 +2139,12 @@ function createRenderer(elements) {
     };
     window.addEventListener("resize", onResize);
     window.addEventListener("orientationchange", onResize);
+    window.addEventListener("haikiso:asset-progress", () => {
+      if (lastGame) {
+        renderScreenPanel(lastGame);
+        drawWorld();
+      }
+    });
   }
 
   return { render, renderLog, getItemName };
