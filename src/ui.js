@@ -2203,6 +2203,26 @@ function bindInput(app) {
 
 // --- touch.js (タッチ操作) ---
 function bindTouch(app) {
+  if (typeof document !== "undefined") {
+    const preventZoom = event => {
+      if (event.touches && event.touches.length > 1) event.preventDefault();
+    };
+    let lastTouchEndAt = 0;
+    const preventDoubleTapZoom = event => {
+      const now = Date.now();
+      if (now - lastTouchEndAt <= 360) event.preventDefault();
+      lastTouchEndAt = now;
+    };
+    const preventGestureZoom = event => event.preventDefault();
+
+    document.addEventListener("touchstart", preventZoom, { passive: false });
+    document.addEventListener("touchmove", preventZoom, { passive: false });
+    document.addEventListener("touchend", preventDoubleTapZoom, { passive: false });
+    document.addEventListener("gesturestart", preventGestureZoom, { passive: false });
+    document.addEventListener("gesturechange", preventGestureZoom, { passive: false });
+    document.addEventListener("gestureend", preventGestureZoom, { passive: false });
+  }
+
   const table = {
     move: arg => { const [dx, dy] = String(arg).split(",").map(Number); app.movePlayer(dx, dy); },
     pickup: () => app.contextPickupOrUse(),
@@ -2243,6 +2263,12 @@ function bindTouch(app) {
 
   const tapZones = document.getElementById("tapZones");
   if (tapZones) {
+    const absorbTapDefault = event => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (typeof AudioSystem !== "undefined") AudioSystem.unlock();
+    };
+
     const handleTapZone = event => {
       let dx = 0;
       let dy = 0;
@@ -2267,10 +2293,15 @@ function bindTouch(app) {
       event.preventDefault();
       event.stopPropagation();
     };
+    tapZones.addEventListener("dblclick", absorbTapDefault, { passive: false });
     if (window.PointerEvent) {
-      tapZones.addEventListener("pointerup", handleTapZone);
+      tapZones.addEventListener("pointerdown", absorbTapDefault, { passive: false });
+      tapZones.addEventListener("pointermove", event => event.preventDefault(), { passive: false });
+      tapZones.addEventListener("pointerup", handleTapZone, { passive: false });
     } else {
-      tapZones.addEventListener("click", handleTapZone);
+      tapZones.addEventListener("touchstart", absorbTapDefault, { passive: false });
+      tapZones.addEventListener("touchmove", event => event.preventDefault(), { passive: false });
+      tapZones.addEventListener("click", handleTapZone, { passive: false });
     }
   }
 
