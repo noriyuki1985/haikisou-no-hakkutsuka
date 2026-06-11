@@ -1494,6 +1494,7 @@ function createRenderer(elements) {
   const pollutionText = document.getElementById("pollutionText");
   const controls = document.getElementById("controls");
   const actionPickupLabel = document.getElementById("actionPickupLabel");
+  const mobileItemBar = document.getElementById("mobileItemBar");
 
   const view = { cols: CONFIG.viewportWidth, rows: CONFIG.viewportHeight, tile: CONFIG.tileSize, dpr: 1, mode: "desktop" };
   const pres = new Map();
@@ -2555,6 +2556,84 @@ function createRenderer(elements) {
     for (const row of remaining) appendLine(inventoryPanel, `${row.index + 1}. ${getItemName(game, row.item)}`);
   }
 
+  function selectedInventoryText(game) {
+    const selectedItem = game.inventory?.[game.selectedIndex];
+    return selectedItem ? getItemName(game, selectedItem) : "なし";
+  }
+
+  function renderMobileItemBar(game) {
+    if (!mobileItemBar) return;
+    clearNode(mobileItemBar);
+    const overlay = game.helpOpen || game.tutorialOpen || game.storyOpen || game.endingOpen || game.runRecordOpen || game.runMenuOpen || game.inventoryOpen || game.npcDialog;
+    const active = FEATURES.mobileInventoryUiV17525 && game.screen === "run" && !overlay && !game.isGameOver && !game.isClear;
+    mobileItemBar.hidden = !active;
+    mobileItemBar.className = "mobile-item-bar" + (FEATURES.mobileInventoryTuningV17527 ? " tuned" : "");
+    if (!active) return;
+
+    const footItem = World.getItemAt(game, game.player.x, game.player.y);
+    const selectedItem = game.inventory?.[game.selectedIndex] || null;
+    const summary = document.createElement("div");
+    summary.className = "mobile-item-summary";
+    if (footItem) {
+      summary.textContent = FEATURES.mobileInventoryTuningV17527 ? `足元: ${getItemName(game, footItem)}｜中央で拾う` : `足元: ${getItemName(game, footItem)} / 中央で拾う`;
+      summary.classList.add("pickup-ready");
+    } else if (selectedItem) {
+      summary.textContent = selectedItem.kind === "return_tag"
+        ? (FEATURES.mobileInventoryTuningV17527 ? `選択: ${getItemName(game, selectedItem)}｜中央/使うで撤退` : `選択: ${getItemName(game, selectedItem)} / 中央か使うで撤退`)
+        : (FEATURES.mobileInventoryTuningV17527 ? `選択: ${getItemName(game, selectedItem)}｜中央で使う` : `選択: ${getItemName(game, selectedItem)} / 中央で使う`);
+    } else {
+      summary.textContent = "所持品なし / 足元の遺物は中央で拾う";
+      summary.classList.add("muted");
+    }
+    mobileItemBar.appendChild(summary);
+
+    const slots = document.createElement("div");
+    slots.className = "mobile-item-slots";
+    if (!game.inventory.length) {
+      const empty = document.createElement("span");
+      empty.className = "mobile-empty-slot";
+      empty.textContent = "空";
+      slots.appendChild(empty);
+    } else {
+      game.inventory.forEach((item, index) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "mobile-item-slot" + (index === game.selectedIndex ? " selected" : "");
+        btn.dataset.cmd = "select";
+        btn.dataset.arg = String(index);
+        btn.textContent = FEATURES.mobileInventoryTuningV17527 ? `${index + 1} ${getItemName(game, item)}` : `${index + 1}.${getItemName(game, item)}`;
+        if (index === game.selectedIndex) btn.dataset.selected = "true";
+        slots.appendChild(btn);
+      });
+    }
+    mobileItemBar.appendChild(slots);
+
+    const actions = document.createElement("div");
+    actions.className = "mobile-item-actions";
+    const actionDefs = [
+      { label: footItem ? "拾う" : "使う", cmd: footItem ? "pickup" : "use", primary: true },
+      { label: "投げる", cmd: "throw" },
+      { label: "捨てる", cmd: "drop" }
+    ];
+    for (const def of actionDefs) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "mobile-item-action" + (def.primary ? " primary" : "");
+      btn.dataset.cmd = def.cmd;
+      btn.textContent = def.label;
+      if (!footItem && !selectedItem && def.cmd !== "pickup") btn.disabled = true;
+      if (footItem && def.cmd !== "pickup") btn.disabled = !selectedItem;
+      actions.appendChild(btn);
+    }
+    mobileItemBar.appendChild(actions);
+    if (FEATURES.mobileInventoryTuningV17527 && game.inventory.length > 1 && typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(() => {
+        const selected = mobileItemBar.querySelector(".mobile-item-slot.selected");
+        if (selected && selected.scrollIntoView) selected.scrollIntoView({ block: "nearest", inline: "center" });
+      });
+    }
+  }
+
   function renderBase(game) {
     clearNode(basePanel);
     const h = document.createElement("h2");
@@ -2688,7 +2767,7 @@ function createRenderer(elements) {
       appendButtons([
         { label: "使う", cmd: "use" },
         { label: "投げる", cmd: "throw" },
-        { label: "置く", cmd: "drop" },
+        { label: "捨てる", cmd: "drop" },
         { label: "閉じる", cmd: "close" }
       ]);
       return;
@@ -2697,7 +2776,7 @@ function createRenderer(elements) {
     if (game.helpOpen) {
       screenPanel.classList.add("compact-menu-screen");
       h.textContent = "ヘルプ / 操作説明";
-      appendPanelLine("スマホ: 画面9分割で移動。中央=足踏み/拾う。", "menu-line");
+      appendPanelLine("スマホ: 9分割で移動。中央=拾う/選択品を使う。", "menu-line");
       appendPanelLine("敵やNPCの方向へ進むと攻撃/会話。");
       appendPanelLine("目的: リフトで進む。最深部は端末→防衛機→コア。");
       appendPanelLine(FEATURES.oneWayDungeonV17524 ? "戻れない。撤退は帰還タグ/P。PCはWASD/矢印、M。" : "帰還: 青白い地点か帰還タグ。PCはWASD/矢印、Mでメニュー。");
@@ -2753,7 +2832,7 @@ function createRenderer(elements) {
       h.textContent = "初回ガイド";
       appendPanelLine("まずは部屋を出て通路を進み、見える範囲を広げる。", "menu-line");
       appendPanelLine("敵は常にこちらを把握しているわけではない。角を曲がる、通路に誘う、アイテムで止める判断が重要。");
-      appendPanelLine("落ちている遺物は足元で中央タップして取得。所持品から選んで使う・投げる・置く。");
+      appendPanelLine("足元の遺物は中央で拾う。所持品バーで選び、使う/投げる/捨てる。");
       appendPanelLine(FEATURES.oneWayDungeonV17524 ? "本目的は浄水コア。通常移動では戻れない。撤退は帰還タグ/P。" : "浄水コア回収が本目的。帰還地点または帰還タグで戻れる。途中帰還は記録に残るが、アイテムは持ち帰らない。");
       appendButtons([{ label: "はじめる", cmd: "start" }]);
       return;
@@ -2823,6 +2902,7 @@ function createRenderer(elements) {
     renderBars(game);
     renderLog(game);
     renderInventory(game);
+    renderMobileItemBar(game);
     renderBase(game);
     renderCodex(game);
     renderScreenPanel(game);

@@ -436,7 +436,7 @@ function createGameApp(elements) {
       return;
     }
     if (game.isGameOver || game.isClear) return endMessage();
-    World.addLog(game, "その場で様子を見る。 ");
+    World.addLog(game, FEATURES.combatTempoV17526 ? "待機" : "その場で様子を見る。 ");
     commitPlayerTurn({ reason: "wait" });
   }
 
@@ -470,6 +470,7 @@ function createGameApp(elements) {
     }
     const enemy = World.getEnemyAt(game, nextX, nextY);
     if (enemy) {
+      if (FEATURES.combatTempoV17526) World.pushFx(game, "alert", nextX, nextY, { actorId: "player", targetId: enemy.id });
       EnemySystem.attackEnemy(game, enemy);
       commitPlayerTurn({ reason: "attack" });
       return;
@@ -527,13 +528,14 @@ function createGameApp(elements) {
     if (game.screen === "run") {
       if (!runInputAllowed()) return;
       if (game.isGameOver || game.isClear) return endMessage();
+      if (World.getItemAt(game, game.player.x, game.player.y)) return pickupItemAtPlayer();
+      if (FEATURES.mobileInventoryUiV17525 && game.inventory[game.selectedIndex]) return useSelectedInventoryItem();
       if (playerAtRunReturnPoint()) {
         if (game.returnPointLeft && !FEATURES.oneWayDungeonV17524) return finishReturn("帰還地点から集落へ戻った。 ");
         World.addLog(game, FEATURES.oneWayDungeonV17524 ? "隔壁は閉鎖。リフトへ。 " : "帰還地点。リフトへ。 ");
         render();
         return;
       }
-      if (World.getItemAt(game, game.player.x, game.player.y)) return pickupItemAtPlayer();
       return waitTurn();
     }
     return startExploration();
@@ -911,7 +913,9 @@ function createGameApp(elements) {
       return true;
     }
     game.selectedIndex = index;
-    World.addLog(game, `選択: ${index + 1}. ${ItemSystem.getItemName(game, game.inventory[index])}`);
+    const selectedItem = game.inventory[index];
+    World.addLog(game, FEATURES.mobileInventoryTuningV17527 ? `選択 ${index + 1}: ${ItemSystem.getItemName(game, selectedItem)}` : `選択: ${index + 1}. ${ItemSystem.getItemName(game, selectedItem)}`);
+    if (FEATURES.mobileInventoryUiV17525 && selectedItem?.kind === "return_tag") World.addLog(game, FEATURES.mobileInventoryTuningV17527 ? "帰還タグ: 中央/使うで撤退" : "緊急帰還タグ: 中央タップか『使う』で撤退。 ");
     render();
     return true;
   }

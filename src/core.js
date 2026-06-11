@@ -1,6 +1,6 @@
 // --- config.js ---
-const VERSION = "v17.5.24";
-const FEATURE_LEVEL = 1773;
+const VERSION = "v17.5.27";
+const FEATURE_LEVEL = 1776;
 
 const FEATURES = {
   items: true,
@@ -78,7 +78,10 @@ const FEATURES = {
   mobileDungeonUiV17521: true,
   dungeonBalanceV17523: true,
   explorationTempoV17523: true,
-  oneWayDungeonV17524: true
+  oneWayDungeonV17524: true,
+  mobileInventoryUiV17525: true,
+  combatTempoV17526: true,
+  mobileInventoryTuningV17527: true
 };
 
 const TILE = {
@@ -100,10 +103,10 @@ const CONFIG = {
   viewportWidthMobile: 9,
   viewportHeightMobile: 9,
   mobileBreakpoint: 760,
-  moveAnimMs: 96,
-  fxMs: 720,
-  combatAnimMs: 360,
-  screenShakePx: 4.0,
+  moveAnimMs: 90,
+  fxMs: 520,
+  combatAnimMs: 240,
+  screenShakePx: 3.0,
   idleAnimMs: 1800,
   enemyAnimMs: 1500,
   spriteAnimStrength: 1.0,
@@ -116,7 +119,7 @@ const CONFIG = {
   roomAttemptLimit: 180,
   mapGenerateRetryLimit: 16,
   minRequiredRooms: 4,
-  maxLogLines: 9,
+  maxLogLines: 7,
   enemyBaseCount: 3,
   enemyMaxCount: 11,
   enemyMinPlayerDistance: 6,
@@ -134,7 +137,13 @@ const CONFIG = {
   trapMaxCount: 8,
   throwRange: 7,
   enemySightRadius: 7,
-  enemyMemoryTurns: 8,
+  enemyMemoryTurns: 7,
+  combatTempo: {
+    shortLogs: true,
+    playerHitPauseMs: 70,
+    enemyHitPauseMs: 80,
+    contactFeedbackTurns: 1
+  },
   baseUpgradeCost: 12,
   maxBaseLevel: 5,
   roomEventChance: 0.42,

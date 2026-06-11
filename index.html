@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>廃棄層の発掘家 v17.5.24</title>
-  <link rel="stylesheet" href="style.css?v=17.5.24">
+  <title>廃棄層の発掘家 v17.5.27</title>
+  <link rel="stylesheet" href="style.css?v=17.5.27">
 </head>
 <body>
   <main class="game">
     <section class="panel">
-      <h1>廃棄層の発掘家 <span id="versionText" class="ver">Version: v17.5.24</span></h1>
+      <h1>廃棄層の発掘家 <span id="versionText" class="ver">Version: v17.5.27</span></h1>
       <div class="bars">
         <div class="bar"><span class="bar-label">HP</span><span class="bar-track"><span id="hpFill" class="bar-fill"></span></span><span id="hpText" class="bar-val">-</span></div>
         <div class="bar"><span class="bar-label">空腹</span><span class="bar-track"><span id="hungerFill" class="bar-fill"></span></span><span id="hungerText" class="bar-val">-</span></div>
@@ -43,6 +43,8 @@
       </aside>
     </section>
 
+    <section class="mobile-item-bar" id="mobileItemBar" aria-label="スマホ用所持品操作"></section>
+
     <section class="hud">
       <section class="box" id="inventoryPanel"><h2>所持品</h2><p>なし</p></section>
       <section class="box" id="basePanel"><h2>拠点</h2><p>未集計</p></section>
@@ -50,12 +52,12 @@
       <section class="box log" id="logPanel"><p>発掘家は再構成された廃棄区域に足を踏み入れた。</p></section>
     </section>
 
-    <p class="hint">スマホ基準: 画面を見えない9分割エリアとして扱う。住人や敵のいる方向へ進むと会話または攻撃。集落東側の廃棄層入口へ向かって進むと進入。廃棄層では青白い出発地点へ戻ると途中帰還。</p>
+    <p class="hint">スマホ基準: 画面を見えない9分割エリアとして扱う。住人や敵のいる方向へ進むと会話または攻撃。集落東側の廃棄層入口へ向かって進むと進入。廃棄層は一本道。足元の遺物は中央タップで拾う。選択中アイテムは中央タップまたは所持品バーの「使う」で使用。</p>
   </main>
 
-  <script src="src/core.js?v=17.5.24"></script>
-  <script src="src/systems.js?v=17.5.24"></script>
-  <script src="src/ui.js?v=17.5.24"></script>
-  <script src="src/game.js?v=17.5.24"></script>
+  <script src="src/core.js?v=17.5.27"></script>
+  <script src="src/systems.js?v=17.5.27"></script>
+  <script src="src/ui.js?v=17.5.27"></script>
+  <script src="src/game.js?v=17.5.27"></script>
 </body>
 </html>

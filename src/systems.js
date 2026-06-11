@@ -232,7 +232,7 @@ const ItemSystem = (() => {
         return true;
       case "return_tag":
         game.pendingExtract = true;
-        World.addLog(game, "緊急帰還タグが起動した。拠点へ撤収する。");
+        World.addLog(game, "緊急帰還タグを使用。拠点へ撤収する。");
         return true;
       case "identify_scanner":
         return identifyOneInventoryItem(game);
@@ -261,6 +261,7 @@ const ItemSystem = (() => {
     game.selectedIndex = game.inventory.length - 1;
     game.debug.pickupCount++;
     World.addLog(game, `${getItemName(game, item)}を拾った。`);
+    if (FEATURES.mobileInventoryUiV17525 && item.kind === "return_tag") World.addLog(game, "緊急帰還タグ: 選択中なら中央タップで撤退できる。 ");
     World.recordCodex(game, `seen:item:${item.kind}`, getItemName(game, item), "廃棄区域で見つかる旧文明品。");
     return true;
   }
@@ -292,7 +293,9 @@ const ItemSystem = (() => {
       return;
     }
     game.selectedIndex = (game.selectedIndex + delta + game.inventory.length) % game.inventory.length;
-    World.addLog(game, `選択: ${game.selectedIndex + 1}. ${getItemName(game, game.inventory[game.selectedIndex])}`);
+    const selectedItem = game.inventory[game.selectedIndex];
+    World.addLog(game, FEATURES.mobileInventoryTuningV17527 ? `選択 ${game.selectedIndex + 1}: ${getItemName(game, selectedItem)}` : `選択: ${game.selectedIndex + 1}. ${getItemName(game, selectedItem)}`);
+    if (FEATURES.mobileInventoryUiV17525 && selectedItem?.kind === "return_tag") World.addLog(game, FEATURES.mobileInventoryTuningV17527 ? "帰還タグ: 中央/使うで撤退" : "緊急帰還タグ: 中央タップか『使う』で撤退。 ");
   }
 
   function dropSelected(game) {
@@ -338,14 +341,14 @@ const ItemSystem = (() => {
       const damage = ITEM_DEFS[item.kind]?.throwDamage || 1;
       hit.hp -= damage;
       World.pushFx(game, "throw", hit.x, hit.y, { actorId: "player", targetId: hit.id, fromX: game.player.x, fromY: game.player.y, damage, itemKind: item.kind });
-      World.addLog(game, `${getItemName(game, item)}を投げ、${hit.name}に${damage}ダメージ。`);
+      World.addLog(game, FEATURES.combatTempoV17526 ? `投擲: ${hit.name} -${damage}` : `${getItemName(game, item)}を投げ、${hit.name}に${damage}ダメージ。`);
       if (hit.hp <= 0) EnemySystem.defeatEnemy(game, hit);
     } else if (!World.getItemAt(game, last.x, last.y) && !World.isBlockedByEntity(game, last.x, last.y)) {
       World.pushFx(game, "throw", last.x, last.y, { actorId: "player", fromX: game.player.x, fromY: game.player.y, itemKind: item.kind });
       game.items.push({ ...item, x: last.x, y: last.y });
-      World.addLog(game, `${getItemName(game, item)}を投げた。床に落ちた。`);
+      World.addLog(game, FEATURES.combatTempoV17526 ? "投げた。" : `${getItemName(game, item)}を投げた。床に落ちた。`);
     } else {
-      World.addLog(game, `${getItemName(game, item)}はどこかへ転がって見失った。`);
+      World.addLog(game, FEATURES.combatTempoV17526 ? "投擲: 紛失" : `${getItemName(game, item)}はどこかへ転がって見失った。`);
     }
     return true;
   }
@@ -516,13 +519,13 @@ const EnemySystem = (() => {
     let damage = getPlayerDamage(game);
     if (enemy.type === "guardian" && FEATURES.bossTerminals && game.terminals.some(t => t.active)) {
       damage = Math.max(1, Math.floor(damage / 2));
-      World.addLog(game, "防衛端末が中枢防衛機への攻撃を減衰した。端末停止が必要だ。 ");
+      World.addLog(game, FEATURES.combatTempoV17526 ? "端末防壁: ダメージ半減" : "防衛端末が中枢防衛機への攻撃を減衰した。端末停止が必要だ。 ");
     }
     enemy.hp -= damage;
     game.debug.playerAttackCount++;
     World.pushFx(game, "hit", enemy.x, enemy.y, { actorId: "player", targetId: enemy.id, fromX: game.player.x, fromY: game.player.y, damage });
     systemSound("hit");
-    World.addLog(game, `${enemy.name}を攻撃。${damage}ダメージ。`);
+    World.addLog(game, FEATURES.combatTempoV17526 ? `攻撃: ${enemy.name} -${damage}` : `${enemy.name}を攻撃。${damage}ダメージ。`);
     World.recordCodex(game, `enemy:${enemy.type}`, enemy.name, ENEMY_DEFS[enemy.type]?.desc || "自律機械。 ");
     if (enemy.hp <= 0) defeatEnemy(game, enemy);
   }
@@ -532,11 +535,11 @@ const EnemySystem = (() => {
     game.debug.enemyDefeatCount++;
     World.pushFx(game, "defeat", enemy.x, enemy.y);
     systemSound("defeat");
-    World.addLog(game, `${enemy.name}は沈黙した。`);
+    World.addLog(game, FEATURES.combatTempoV17526 ? `撃破: ${enemy.name}` : `${enemy.name}は沈黙した。`);
     if (enemy.type === "guardian") game.bossDefeated = true;
     if (enemy.carriedItem && !World.getItemAt(game, enemy.x, enemy.y)) {
       game.items.push({ ...enemy.carriedItem, x: enemy.x, y: enemy.y });
-      World.addLog(game, `${enemy.name}が運んでいた遺物が落ちた。`);
+      World.addLog(game, FEATURES.combatTempoV17526 ? "遺物が落ちた。" : `${enemy.name}が運んでいた遺物が落ちた。`);
     }
   }
 
@@ -546,11 +549,11 @@ const EnemySystem = (() => {
       const index = randInt(0, game.inventory.length - 1);
       const item = game.inventory.splice(index, 1)[0];
       game.selectedIndex = clamp(game.selectedIndex, 0, Math.max(0, game.inventory.length - 1));
-      World.addLog(game, `分別ロボットが${ItemSystem.getItemName(game, item)}を廃棄した。`);
+      World.addLog(game, FEATURES.combatTempoV17526 ? `所持品破損: ${ItemSystem.getItemName(game, item)}` : `分別ロボットが${ItemSystem.getItemName(game, item)}を廃棄した。`);
     }
     if (enemy.type === "medic" && chance(0.35)) {
       game.player.immobilizedTurns = Math.max(game.player.immobilizedTurns, 2);
-      World.addLog(game, "医療ロボットが強制固定を開始した。しばらく動けない。 ");
+      World.addLog(game, FEATURES.combatTempoV17526 ? "拘束: 2ターン" : "医療ロボットが強制固定を開始した。しばらく動けない。 ");
     }
   }
 
@@ -563,7 +566,7 @@ const EnemySystem = (() => {
     game.debug.enemyAttackCount++;
     World.pushFx(game, "hurt", game.player.x, game.player.y, { actorId: enemy.id, targetId: "player", fromX: enemy.x, fromY: enemy.y, damage });
     systemSound("hurt");
-    World.addLog(game, `${enemy.name}が発掘家を攻撃。HP ${game.player.hp}/${game.player.maxHp}。`);
+    World.addLog(game, FEATURES.combatTempoV17526 ? `被弾: ${enemy.name} -${damage} HP${game.player.hp}/${game.player.maxHp}` : `${enemy.name}が発掘家を攻撃。HP ${game.player.hp}/${game.player.maxHp}。`);
     applyContactAbility(game, enemy);
     if (game.player.hp <= 0 && onDeath) onDeath("発掘家は自律機械に倒された。Nキーで再開。");
   }
@@ -626,15 +629,21 @@ const EnemySystem = (() => {
   function beginEnemyIntent(game, enemy, kind) {
     enemy.intent = { kind, targetX: game.player.x, targetY: game.player.y, turn: game.turn };
     World.pushFx(game, "alert", enemy.x, enemy.y, { actorId: enemy.id, targetId: "player", fromX: enemy.x, fromY: enemy.y });
-    const message = kind === "laser"
-      ? `${enemy.name}が砲口を展開した。射線に入るな。`
-      : kind === "shoot"
-        ? `${enemy.name}が射撃姿勢に入った。`
-        : kind === "pounce"
-          ? `${enemy.name}が低く身構えた。飛びかかる気配だ。`
-          : kind === "slash"
-            ? `${enemy.name}が刃を振り上げた。`
-            : `${enemy.name}が攻撃動作に入った。`;
+    const message = FEATURES.combatTempoV17526
+      ? (kind === "laser" ? `${enemy.name}: 砲撃準備`
+        : kind === "shoot" ? `${enemy.name}: 射撃準備`
+        : kind === "pounce" ? `${enemy.name}: 突進準備`
+        : kind === "slash" ? `${enemy.name}: 近接準備`
+        : `${enemy.name}: 攻撃準備`)
+      : kind === "laser"
+        ? `${enemy.name}が砲口を展開した。射線に入るな。`
+        : kind === "shoot"
+          ? `${enemy.name}が射撃姿勢に入った。`
+          : kind === "pounce"
+            ? `${enemy.name}が低く身構えた。飛びかかる気配だ。`
+            : kind === "slash"
+              ? `${enemy.name}が刃を振り上げた。`
+              : `${enemy.name}が攻撃動作に入った。`;
     if (game.visible[enemy.y]?.[enemy.x]) World.addLog(game, message);
   }
 
@@ -648,7 +657,7 @@ const EnemySystem = (() => {
     const visible = Boolean(game.visible[enemy.y]?.[enemy.x]);
     if (["shoot", "laser"].includes(kind)) {
       if (!lineShotPossible(game, enemy)) {
-        if (visible) World.addLog(game, `${enemy.name}の狙いが外れた。`);
+        if (visible) World.addLog(game, FEATURES.combatTempoV17526 ? `${enemy.name}: 外れ` : `${enemy.name}の狙いが外れた。`);
         clearEnemyIntent(enemy);
         return false;
       }
@@ -660,18 +669,18 @@ const EnemySystem = (() => {
       if (kind === "laser") game.debug.bossLaserCount++;
       World.pushFx(game, kind === "laser" ? "laser" : "shoot", game.player.x, game.player.y, { actorId: enemy.id, targetId: "player", fromX: enemy.x, fromY: enemy.y, damage });
       systemSound(kind === "laser" ? "laser" : "shoot");
-      World.addLog(game, `${enemy.name}が${kind === "laser" ? "砲撃" : "射撃"}した。HP ${game.player.hp}/${game.player.maxHp}。`);
+      World.addLog(game, FEATURES.combatTempoV17526 ? `${kind === "laser" ? "砲撃" : "射撃"}: ${enemy.name} -${damage} HP${game.player.hp}/${game.player.maxHp}` : `${enemy.name}が${kind === "laser" ? "砲撃" : "射撃"}した。HP ${game.player.hp}/${game.player.maxHp}。`);
       clearEnemyIntent(enemy);
       if (game.player.hp <= 0 && onDeath) onDeath(kind === "laser" ? "発掘家は防衛機の砲撃で倒れた。Nキーで再開。" : "発掘家は旧軍の射撃で倒れた。Nキーで再開。");
       return false;
     }
     if (manhattan(enemy.x, enemy.y, game.player.x, game.player.y) !== 1) {
-      if (visible) World.addLog(game, `${enemy.name}の攻撃予兆は空を切った。`);
+      if (visible) World.addLog(game, FEATURES.combatTempoV17526 ? `${enemy.name}: 空振り` : `${enemy.name}の攻撃予兆は空を切った。`);
       clearEnemyIntent(enemy);
       return false;
     }
-    if (kind === "pounce" && visible) World.addLog(game, `${enemy.name}が飛びかかった。`);
-    else if (kind === "slash" && visible) World.addLog(game, `${enemy.name}が刃を振り下ろした。`);
+    if (!FEATURES.combatTempoV17526 && kind === "pounce" && visible) World.addLog(game, `${enemy.name}が飛びかかった。`);
+    else if (!FEATURES.combatTempoV17526 && kind === "slash" && visible) World.addLog(game, `${enemy.name}が刃を振り下ろした。`);
     attackPlayer(game, enemy, onDeath);
     clearEnemyIntent(enemy);
     return false;
@@ -688,7 +697,7 @@ const EnemySystem = (() => {
   function updateAwareness(game, enemy) {
     if (enemyCanSeePlayer(game, enemy)) {
       if (enemy.state !== "chase" && game.visible[enemy.y]?.[enemy.x]) {
-        World.addLog(game, `${enemy.name}が発掘家を捕捉した。`);
+        World.addLog(game, FEATURES.combatTempoV17526 ? `${enemy.name}: 捕捉` : `${enemy.name}が発掘家を捕捉した。`);
         World.pushFx(game, "alert", enemy.x, enemy.y, { actorId: enemy.id });
       }
       enemy.state = "chase";
