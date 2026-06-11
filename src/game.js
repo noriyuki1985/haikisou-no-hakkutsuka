@@ -8,7 +8,7 @@ function createGameApp(elements) {
   const game = GameState.createInitialGame();
 
   // 廃棄層入口の隔壁通過シーケンス用タイマー。
-  // v17.5.10: 入口遷移時の未定義参照を防ぎ、再開始時に残タイマーを消す。
+  // v17.5.12: 入口遷移時の未定義参照を防ぎ、再開始時に残タイマーを消す。
   const transitionTimers = [];
   function clearTransitionTimers() {
     while (transitionTimers.length) {
@@ -149,9 +149,10 @@ function createGameApp(elements) {
       openRunScreen();
       World.addLog(game, "廃棄層の入口をくぐった。内部構造が再構成される。 ");
       MapSystem.generate(game);
+      startRunIntro();
       game.settlement.bestDepth = Math.max(game.settlement.bestDepth, game.depth);
-      World.addLog(game, `区画生成完了。部屋数 ${game.rooms.length}。敵 ${game.enemies.length} 体を検出。`);
-      if (FEATURES.floorEvents) World.addLog(game, `フロアイベント: ${FLOOR_EVENT_DEFS[game.floorEvent]?.name || "通常稼働"}。`);
+      World.addLog(game, `区画生成。部屋${game.rooms.length} / 敵${game.enemies.length}。`);
+      if (FEATURES.floorEvents && !FEATURES.explorationTempoV17523) World.addLog(game, `フロアイベント: ${FLOOR_EVENT_DEFS[game.floorEvent]?.name || "通常稼働"}。`);
       game.transition = null;
       clearTransitionTimers();
       playSound("terminal");
@@ -206,6 +207,27 @@ function createGameApp(elements) {
     return game.screen === "base" && chebyshev(game.player.x, game.player.y, ent.x, ent.y) <= radius;
   }
 
+  function playerAtRunReturnPoint() {
+    const rp = game.returnPoint;
+    return game.screen === "run" && rp && game.player.x === rp.x && game.player.y === rp.y;
+  }
+
+  function updateReturnPointState(previousX, previousY) {
+    const rp = game.returnPoint;
+    if (!rp || game.screen !== "run") return;
+    if (previousX === rp.x && previousY === rp.y && (game.player.x !== rp.x || game.player.y !== rp.y)) {
+      game.returnPointLeft = true;
+      World.addLog(game, FEATURES.oneWayDungeonV17524 ? "隔壁は閉じた。下層へ進む。 " : "帰還地点を離れた。危険なら戻る。 ");
+    }
+  }
+
+  function startRunIntro() {
+    if (!FEATURES.runEntryGuidanceV17511) return;
+    game.runIntroShown = true;
+    game.runIntroUntil = Date.now() + (CONFIG.runIntroDurationMs || 2600);
+    World.addLog(game, game.depth >= CONFIG.maxDepth ? "最深部。端末→防衛機→コア。" : "一本道。リフトへ。");
+  }
+
   function updateEntranceGuidanceAfterMove() {
     if (!FEATURES.settlement || game.screen !== "base") return;
     if (playerInSettlementEntranceZone()) {
@@ -242,6 +264,8 @@ function createGameApp(elements) {
   function moveSettlementPlayer(dx, dy) {
     if (baseInputBlocked()) return;
     if (dx === 0 && dy === 0) return talkAdjacentNpc();
+    const previousX = game.player.x;
+    const previousY = game.player.y;
     const nextX = game.player.x + dx;
     const nextY = game.player.y + dy;
     game.player.lastDir = { x: dx, y: dy };
@@ -382,10 +406,10 @@ function createGameApp(elements) {
     game.depth++;
     game.settlement.bestDepth = Math.max(game.settlement.bestDepth, game.depth);
     MapSystem.generate(game);
-    World.addLog(game, game.depth >= CONFIG.maxDepth ? "搬送リフトが最深層で停止した。浄水コアを探せ。" : `搬送リフトが稼働した。深度 ${game.depth} へ移動した。`);
+    World.addLog(game, game.depth >= CONFIG.maxDepth ? "最深層。端末を止め、コアを回収する。" : `深度 ${game.depth}。リフトを探す。`);
     playSound("terminal");
-    if (FEATURES.floorEvents) World.addLog(game, `フロアイベント: ${FLOOR_EVENT_DEFS[game.floorEvent]?.name || "通常稼働"}。`);
-    if (FEATURES.bossTerminals && game.depth >= CONFIG.maxDepth) World.addLog(game, "中枢防衛端末をすべて停止し、防衛機を沈黙させてからコアを回収する。 ");
+    if (FEATURES.floorEvents && !FEATURES.explorationTempoV17523) World.addLog(game, `フロアイベント: ${FLOOR_EVENT_DEFS[game.floorEvent]?.name || "通常稼働"}。`);
+    if (FEATURES.bossTerminals && game.depth >= CONFIG.maxDepth) World.addLog(game, "手順: 端末停止 → 防衛機停止 → コア回収。 ");
     game.turn++;
     TurnSystem.applySurvivalTick(game, { reason: "lift" }, triggerGameOver);
     VisibilitySystem.update(game);
@@ -431,6 +455,8 @@ function createGameApp(elements) {
       render();
       return;
     }
+    const previousX = game.player.x;
+    const previousY = game.player.y;
     const nextX = game.player.x + dx;
     const nextY = game.player.y + dy;
     game.player.lastDir = { x: dx, y: dy };
@@ -450,6 +476,7 @@ function createGameApp(elements) {
     }
     game.player.x = nextX;
     game.player.y = nextY;
+    updateReturnPointState(previousX, previousY);
     playSound("move");
     MapSystem.handleRoomEntry(game);
     TrapSystem.trigger(game, triggerGameOver);
@@ -459,8 +486,9 @@ function createGameApp(elements) {
       return;
     }
     const item = World.getItemAt(game, game.player.x, game.player.y);
-    if (item) World.addLog(game, `${ItemSystem.getItemName(game, item)}が落ちている。拾うボタンで取得できる。`);
+    if (item) World.addLog(game, `${ItemSystem.getItemName(game, item)}。中央タップで拾う。`);
     const tile = World.getTile(game, game.player.x, game.player.y);
+    if (tile === TILE.ENTRANCE && game.returnPointLeft) { World.addLog(game, FEATURES.oneWayDungeonV17524 ? "隔壁は閉鎖。戻れない。 " : "帰還地点から集落へ戻れる。 "); if (!FEATURES.oneWayDungeonV17524) return finishReturn("帰還地点から集落へ戻った。 "); }
     if (tile === TILE.LIFT) return moveToNextDepth();
     if (tile === TILE.CORE) return acquireCore();
     if (tile === TILE.TERMINAL && operateTerminal()) return commitPlayerTurn({ reason: "terminal" });
@@ -499,6 +527,12 @@ function createGameApp(elements) {
     if (game.screen === "run") {
       if (!runInputAllowed()) return;
       if (game.isGameOver || game.isClear) return endMessage();
+      if (playerAtRunReturnPoint()) {
+        if (game.returnPointLeft && !FEATURES.oneWayDungeonV17524) return finishReturn("帰還地点から集落へ戻った。 ");
+        World.addLog(game, FEATURES.oneWayDungeonV17524 ? "隔壁は閉鎖。リフトへ。 " : "帰還地点。リフトへ。 ");
+        render();
+        return;
+      }
       if (World.getItemAt(game, game.player.x, game.player.y)) return pickupItemAtPlayer();
       return waitTurn();
     }
@@ -585,6 +619,10 @@ function createGameApp(elements) {
       hasStarted: game.hasStarted
     };
     GameState.resetRun(game, keepSettlement);
+    game.runIntroUntil = 0;
+    game.runIntroShown = false;
+    game.returnPoint = null;
+    game.returnPointLeft = false;
     game.settlement = settlement;
     game.completedMissions = {};
     game.debug.restartCount = restartCount;
@@ -604,8 +642,8 @@ function createGameApp(elements) {
     World.addLog(game, "新しい発掘を開始した。 ");
     MapSystem.generate(game);
     game.settlement.bestDepth = Math.max(game.settlement.bestDepth, game.depth);
-    World.addLog(game, `区画生成完了。部屋数 ${game.rooms.length}。敵 ${game.enemies.length} 体を検出。`);
-    if (FEATURES.floorEvents) World.addLog(game, `フロアイベント: ${FLOOR_EVENT_DEFS[game.floorEvent]?.name || "通常稼働"}。`);
+    World.addLog(game, `区画生成。部屋${game.rooms.length} / 敵${game.enemies.length}。`);
+    if (FEATURES.floorEvents && !FEATURES.explorationTempoV17523) World.addLog(game, `フロアイベント: ${FLOOR_EVENT_DEFS[game.floorEvent]?.name || "通常稼働"}。`);
     render();
   }
 

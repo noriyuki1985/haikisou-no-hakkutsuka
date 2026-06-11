@@ -26,6 +26,34 @@ const Visuals = (() => {
     [TILE.POLLUTION]: "assets/tiles/pollution.png"
   };
 
+  const DUNGEON_TILE_SPRITE_PATHS = {
+    floor_base_a: "assets/dungeon/floor_base_a.png",
+    floor_base_b: "assets/dungeon/floor_base_b.png",
+    floor_base_c: "assets/dungeon/floor_base_c.png",
+    wall_base_a: "assets/dungeon/wall_base_a.png",
+    wall_base_b: "assets/dungeon/wall_base_b.png",
+    wall_inner_corner: "assets/dungeon/wall_inner_corner.png",
+    wall_outer_corner: "assets/dungeon/wall_outer_corner.png",
+    wall_end_cap: "assets/dungeon/wall_end_cap.png",
+    void_dark: "assets/dungeon/void_dark.png",
+    floor_wall_transition: "assets/dungeon/floor_wall_transition.png"
+  };
+
+  const DUNGEON_OBJECT_SPRITE_PATHS = {
+    return_point_tile: "assets/dungeon/return_point_tile.png",
+    lift_tile: "assets/dungeon/lift_tile.png",
+    terminal_tile: "assets/dungeon/terminal_tile.png",
+    core_pedestal_tile: "assets/dungeon/core_pedestal_tile.png"
+  };
+
+  const DUNGEON_DECOR_SPRITE_PATHS = {
+    decor_rust: "assets/dungeon/decor_rust.png",
+    decor_cables: "assets/dungeon/decor_cables.png",
+    decor_scrap: "assets/dungeon/decor_scrap.png",
+    decor_pipe: "assets/dungeon/decor_pipe.png",
+    decor_panel: "assets/dungeon/decor_panel.png"
+  };
+
   const ITEM_ICON_PATHS = {
     food: "assets/items/nutrition_block.png",
     medicine: "assets/items/medicine.png",
@@ -146,6 +174,9 @@ const Visuals = (() => {
 
   const preloadMap = { ...SPRITE_PATHS };
   for (const [tile, src] of Object.entries(TILE_SPRITE_PATHS)) preloadMap[`tile:${tile}`] = src;
+  for (const [key, src] of Object.entries(DUNGEON_TILE_SPRITE_PATHS)) preloadMap[`dungeonTile:${key}`] = src;
+  for (const [key, src] of Object.entries(DUNGEON_OBJECT_SPRITE_PATHS)) preloadMap[`dungeonObject:${key}`] = src;
+  for (const [key, src] of Object.entries(DUNGEON_DECOR_SPRITE_PATHS)) preloadMap[`dungeonDecor:${key}`] = src;
   for (const [category, src] of Object.entries(ITEM_ICON_PATHS)) preloadMap[`item:${category}`] = src;
   for (const [key, src] of Object.entries(UI_SPRITE_PATHS)) preloadMap[`ui:${key}`] = src;
   for (const [key, src] of Object.entries(EFFECT_SPRITE_PATHS)) preloadMap[`fx:${key}`] = src;
@@ -381,6 +412,454 @@ const Visuals = (() => {
     if (!visible) {
       ctx.fillStyle = "rgba(0,0,0,0.58)";
       ctx.fillRect(px, py, t, t);
+    }
+    return true;
+  }
+
+  function dungeonCoordHash(x, y, salt = 0) {
+    let h = 2166136261 ^ Math.imul((x | 0) + 101, 374761393) ^ Math.imul((y | 0) + 917, 668265263) ^ Math.imul((salt | 0) + 31, 2246822519);
+    h ^= h >>> 13;
+    h = Math.imul(h, 1274126177);
+    return h >>> 0;
+  }
+
+  function dungeonPick(list, x, y, salt = 0) {
+    return list[dungeonCoordHash(x, y, salt) % list.length];
+  }
+
+  function dungeonWalkableKind(kind) {
+    return [TILE.FLOOR, TILE.LIFT, TILE.CORE, TILE.TERMINAL, TILE.POLLUTION, TILE.ENTRANCE].includes(kind);
+  }
+
+  function dungeonObjectKey(kind) {
+    if (kind === TILE.ENTRANCE) return "return_point_tile";
+    if (kind === TILE.LIFT) return "lift_tile";
+    if (kind === TILE.TERMINAL) return "terminal_tile";
+    if (kind === TILE.CORE) return "core_pedestal_tile";
+    return null;
+  }
+
+  function dungeonObjectDisplayScale(objectKey) {
+    const table = CONFIG.dungeonObjectScale || {};
+    const value = Number(table[objectKey]);
+    return Number.isFinite(value) ? clamp(value, 0.72, 1.0) : 1.0;
+  }
+
+  function drawDungeonObjectBaseFloor(ctx, gx, gy, px, py, t) {
+    const floorKey = `dungeonTile:${dungeonPick(["floor_base_a", "floor_base_b", "floor_base_c"], gx, gy, 227)}`;
+    if (FEATURES.imageSprites && spriteReady(floorKey)) {
+      ctx.drawImage(SPRITES[floorKey], px, py, t, t);
+      return true;
+    }
+    return false;
+  }
+
+  function drawDungeonObjectFocus(ctx, objectKey, px, py, t, visible) {
+    if (!visible) return;
+    const cx = px + t * 0.5;
+    const cy = py + t * 0.5;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    if (objectKey === "return_point_tile") {
+      glow(ctx, cx, cy, t * 0.78, "rgba(100,220,255,1)", 0.16);
+      ctx.strokeStyle = "rgba(172,242,255,0.58)";
+      ctx.lineWidth = Math.max(1.2, t * 0.030);
+      ctx.beginPath();
+      ctx.arc(cx, cy, t * 0.30, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (objectKey === "lift_tile") {
+      glow(ctx, cx, cy, t * 0.62, "rgba(255,202,86,1)", 0.11);
+      ctx.strokeStyle = "rgba(255,218,118,0.48)";
+      ctx.lineWidth = Math.max(1.2, t * 0.030);
+      ctx.strokeRect(px + t * 0.18, py + t * 0.18, t * 0.64, t * 0.64);
+    } else if (objectKey === "terminal_tile") {
+      glow(ctx, cx, cy - t * 0.04, t * 0.55, "rgba(80,255,210,1)", 0.12);
+      ctx.fillStyle = "rgba(104,255,220,0.20)";
+      ctx.fillRect(px + t * 0.38, py + t * 0.30, t * 0.24, t * 0.16);
+    } else if (objectKey === "core_pedestal_tile") {
+      glow(ctx, cx, cy, t * 0.90, "rgba(96,222,255,1)", 0.18);
+      ctx.strokeStyle = "rgba(180,246,255,0.64)";
+      ctx.lineWidth = Math.max(1.4, t * 0.034);
+      ctx.beginPath();
+      ctx.arc(cx, cy, t * 0.35, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawDungeonObjectTile(ctx, game, kind, gx, gy, px, py, t, visible) {
+    if (!FEATURES.dungeonSpecialObjectsV17515) return false;
+    const objectKey = dungeonObjectKey(kind);
+    if (!objectKey) return false;
+    const spriteKey = `dungeonObject:${objectKey}`;
+    if (!FEATURES.imageSprites || !spriteReady(spriteKey)) return false;
+    const img = SPRITES[spriteKey];
+    const scale = FEATURES.dungeonReadabilityV17518 ? dungeonObjectDisplayScale(objectKey) : 1.0;
+    const size = t * scale;
+    const dx = px + (t - size) / 2;
+    const dy = py + (t - size) / 2;
+    ctx.save();
+    if (FEATURES.dungeonReadabilityV17518 && scale < 0.995) {
+      drawDungeonObjectBaseFloor(ctx, gx, gy, px, py, t);
+      drawDungeonFloorEdgeShadows(ctx, game, gx, gy, px, py, t, visible);
+    }
+    ctx.drawImage(img, dx, dy, size, size);
+    if (FEATURES.dungeonReadabilityV17518) drawDungeonObjectFocus(ctx, objectKey, px, py, t, visible);
+    if (!visible) {
+      ctx.fillStyle = "rgba(0,0,0,0.48)";
+      ctx.fillRect(px, py, t, t);
+    }
+    ctx.restore();
+    return true;
+  }
+
+  function dungeonIsWalkableAt(game, x, y) {
+    if (!game?.map || y < 0 || x < 0 || y >= game.map.length || x >= (game.map[y]?.length || 0)) return false;
+    return dungeonWalkableKind(game.map[y][x]);
+  }
+
+  function dungeonBlockedAt(game, x, y) {
+    if (!game?.map || y < 0 || x < 0 || y >= game.map.length || x >= (game.map[y]?.length || 0)) return true;
+    return !dungeonWalkableKind(game.map[y][x]);
+  }
+
+  function dungeonNeighbors(game, gx, gy, mode = "walkable") {
+    const fn = mode === "blocked" ? dungeonBlockedAt : dungeonIsWalkableAt;
+    return {
+      n: fn(game, gx, gy - 1),
+      e: fn(game, gx + 1, gy),
+      s: fn(game, gx, gy + 1),
+      w: fn(game, gx - 1, gy)
+    };
+  }
+
+  function dungeonTransitionTurnForBlocked(blocked) {
+    const count = (blocked.n ? 1 : 0) + (blocked.e ? 1 : 0) + (blocked.s ? 1 : 0) + (blocked.w ? 1 : 0);
+    if (count !== 1) return null;
+    // floor_wall_transition は「壁が上・床が下」の向きで生成されている。
+    if (blocked.n) return 0;
+    if (blocked.e) return 1;
+    if (blocked.s) return 2;
+    if (blocked.w) return 3;
+    return null;
+  }
+
+  function dungeonTurnTowardWalkable(walkable) {
+    // wall_end_cap は「床が下側」の向きを基準に使う。
+    if (walkable.s) return 0;
+    if (walkable.w) return 1;
+    if (walkable.n) return 2;
+    if (walkable.e) return 3;
+    return 0;
+  }
+
+  function dungeonTileChoice(game, kind, gx, gy) {
+    const floorKeys = ["floor_base_a", "floor_base_b", "floor_base_c"];
+    const wallKeys = ["wall_base_a", "wall_base_b"];
+    const walkable = dungeonWalkableKind(kind);
+
+    if (walkable) {
+      // 特殊床はアイコン視認性を優先し、派手な境界タイルを敷かない。
+      if (kind !== TILE.FLOOR && kind !== TILE.POLLUTION) {
+        return { key: dungeonPick(floorKeys, gx, gy, 31), turns: 0, kind: "floor" };
+      }
+      const blocked = dungeonNeighbors(game, gx, gy, "blocked");
+      const transitionTurn = dungeonTransitionTurnForBlocked(blocked);
+      if (transitionTurn !== null && (dungeonCoordHash(gx, gy, 47) % 4 !== 0)) {
+        return { key: "floor_wall_transition", turns: transitionTurn, kind: "floor" };
+      }
+      return { key: dungeonPick(floorKeys, gx, gy, 11), turns: 0, kind: "floor" };
+    }
+
+    if (kind !== TILE.WALL) return null;
+
+    const n = dungeonIsWalkableAt(game, gx, gy - 1);
+    const e = dungeonIsWalkableAt(game, gx + 1, gy);
+    const s = dungeonIsWalkableAt(game, gx, gy + 1);
+    const w = dungeonIsWalkableAt(game, gx - 1, gy);
+    const count = (n ? 1 : 0) + (e ? 1 : 0) + (s ? 1 : 0) + (w ? 1 : 0);
+    const outer = gx <= 0 || gy <= 0 || gx >= CONFIG.mapWidth - 1 || gy >= CONFIG.mapHeight - 1;
+
+    if (outer || count === 0) return { key: "void_dark", turns: 0, kind: "void" };
+    if (count === 1) return { key: "wall_end_cap", turns: dungeonTurnTowardWalkable({ n, e, s, w }), kind: "wall" };
+
+    if (count === 2 && !((n && s) || (e && w))) {
+      let turns = 0;
+      if (s && w) turns = 0;
+      else if (w && n) turns = 1;
+      else if (n && e) turns = 2;
+      else if (e && s) turns = 3;
+      return { key: "wall_inner_corner", turns, kind: "wall" };
+    }
+
+    if (count >= 3) return { key: "wall_outer_corner", turns: dungeonCoordHash(gx, gy, 23) % 4, kind: "wall" };
+    if ((n && s) || (e && w)) return { key: dungeonPick(wallKeys, gx, gy, 17), turns: e && w ? 1 : 0, kind: "wall" };
+    return { key: dungeonPick(wallKeys, gx, gy, 19), turns: 0, kind: "wall" };
+  }
+
+  function drawDungeonFloorEdgeShadows(ctx, game, gx, gy, px, py, t, visible) {
+    const blocked = dungeonNeighbors(game, gx, gy, "blocked");
+    const alpha = FEATURES.dungeonReadabilityV17518 ? (visible ? 0.13 : 0.06) : (visible ? 0.18 : 0.08);
+    const soft = FEATURES.dungeonReadabilityV17518 ? (visible ? 0.040 : 0.018) : (visible ? 0.055 : 0.025);
+    ctx.save();
+    ctx.globalCompositeOperation = "multiply";
+    if (blocked.n) {
+      const g = ctx.createLinearGradient(px, py, px, py + t * 0.34);
+      g.addColorStop(0, `rgba(0,0,0,${alpha})`);
+      g.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(px, py, t, t * 0.36);
+    }
+    if (blocked.s) {
+      const g = ctx.createLinearGradient(px, py + t, px, py + t * 0.66);
+      g.addColorStop(0, `rgba(0,0,0,${alpha * 0.85})`);
+      g.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(px, py + t * 0.64, t, t * 0.36);
+    }
+    if (blocked.w) {
+      const g = ctx.createLinearGradient(px, py, px + t * 0.34, py);
+      g.addColorStop(0, `rgba(0,0,0,${alpha * 0.80})`);
+      g.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(px, py, t * 0.36, t);
+    }
+    if (blocked.e) {
+      const g = ctx.createLinearGradient(px + t, py, px + t * 0.66, py);
+      g.addColorStop(0, `rgba(0,0,0,${alpha * 0.80})`);
+      g.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(px + t * 0.64, py, t * 0.36, t);
+    }
+    ctx.globalCompositeOperation = "lighter";
+    ctx.fillStyle = `rgba(150,220,230,${soft})`;
+    ctx.fillRect(px + t * 0.18, py + t * 0.18, t * 0.64, t * 0.64);
+    ctx.restore();
+  }
+
+  function drawDungeonWallTone(ctx, game, gx, gy, px, py, t, visible, choice) {
+    ctx.save();
+    if (choice?.kind === "void") {
+      ctx.fillStyle = visible ? "rgba(0,0,0,0.16)" : "rgba(0,0,0,0.34)";
+      ctx.fillRect(px, py, t, t);
+      ctx.restore();
+      return;
+    }
+    ctx.globalCompositeOperation = "multiply";
+    ctx.fillStyle = visible ? "rgba(0,0,0,0.18)" : "rgba(0,0,0,0.42)";
+    ctx.fillRect(px, py, t, t);
+    ctx.globalCompositeOperation = "lighter";
+    const near = dungeonNeighbors(game, gx, gy, "walkable");
+    if (near.s || near.e || near.w || near.n) {
+      ctx.strokeStyle = visible ? "rgba(190,210,190,0.12)" : "rgba(150,160,160,0.05)";
+      ctx.lineWidth = Math.max(1, t * 0.035);
+      if (near.s) { ctx.beginPath(); ctx.moveTo(px, py + t * 0.94); ctx.lineTo(px + t, py + t * 0.94); ctx.stroke(); }
+      if (near.n) { ctx.beginPath(); ctx.moveTo(px, py + t * 0.06); ctx.lineTo(px + t, py + t * 0.06); ctx.stroke(); }
+      if (near.e) { ctx.beginPath(); ctx.moveTo(px + t * 0.94, py); ctx.lineTo(px + t * 0.94, py + t); ctx.stroke(); }
+      if (near.w) { ctx.beginPath(); ctx.moveTo(px + t * 0.06, py); ctx.lineTo(px + t * 0.06, py + t); ctx.stroke(); }
+    }
+    ctx.restore();
+  }
+
+  function dungeonNearImportantObject(game, gx, gy, radius = 1) {
+    const targets = [];
+    if (game.returnPoint) targets.push(game.returnPoint);
+    if (game.lift?.active) targets.push(game.lift);
+    if (game.core?.active && !game.core.acquired) targets.push(game.core);
+    for (const terminal of game.terminals || []) if (terminal.active) targets.push(terminal);
+    return targets.some(pos => chebyshev(gx, gy, pos.x, pos.y) <= radius);
+  }
+
+  function dungeonRoomTypeAt(game, gx, gy) {
+    if (!FEATURES.dungeonRoomTypesV17520 || !game?.roomMap) return "normal";
+    const roomId = game.roomMap[gy]?.[gx] ?? -1;
+    if (roomId < 0) return "corridor";
+    return game.rooms?.[roomId]?.roomType || "normal";
+  }
+
+  function dungeonRoomDecorMultiplier(game, gx, gy) {
+    const type = dungeonRoomTypeAt(game, gx, gy);
+    if (type === "scrap") return 1.55;
+    if (type === "terminal") return 1.25;
+    if (type === "polluted") return 1.35;
+    if (type === "corridor") return 0.72;
+    return 1.0;
+  }
+
+  function dungeonDecorMetaForRoom(game, gx, gy, variantRoll) {
+    const type = dungeonRoomTypeAt(game, gx, gy);
+    if (type === "scrap") {
+      if (variantRoll < 32) return { key: "decor_scrap", scale: 0.72, alpha: 0.82 };
+      if (variantRoll < 58) return { key: "decor_cables", scale: 0.82, alpha: 0.72 };
+      if (variantRoll < 76) return { key: "decor_panel", scale: 0.72, alpha: 0.66 };
+      if (variantRoll < 88) return { key: "decor_pipe", scale: 0.74, alpha: 0.78 };
+      return { key: "decor_rust", scale: 0.90, alpha: 0.36 };
+    }
+    if (type === "terminal") {
+      if (variantRoll < 34) return { key: "decor_panel", scale: 0.74, alpha: 0.68 };
+      if (variantRoll < 62) return { key: "decor_cables", scale: 0.82, alpha: 0.72 };
+      if (variantRoll < 78) return { key: "decor_pipe", scale: 0.74, alpha: 0.78 };
+      if (variantRoll < 90) return { key: "decor_scrap", scale: 0.66, alpha: 0.78 };
+      return { key: "decor_rust", scale: 0.86, alpha: 0.34 };
+    }
+    if (type === "polluted") {
+      if (variantRoll < 52) return { key: "decor_rust", scale: 0.92, alpha: 0.42 };
+      if (variantRoll < 70) return { key: "decor_pipe", scale: 0.74, alpha: 0.78 };
+      if (variantRoll < 84) return { key: "decor_cables", scale: 0.78, alpha: 0.66 };
+      if (variantRoll < 94) return { key: "decor_scrap", scale: 0.64, alpha: 0.76 };
+      return { key: "decor_panel", scale: 0.70, alpha: 0.58 };
+    }
+    if (variantRoll < 34) return { key: "decor_rust", scale: 0.90, alpha: 0.38 };
+    if (variantRoll < 56) return { key: "decor_cables", scale: 0.82, alpha: 0.74 };
+    if (variantRoll < 76) return { key: "decor_scrap", scale: 0.68, alpha: 0.82 };
+    if (variantRoll < 88) return { key: "decor_pipe", scale: 0.74, alpha: 0.80 };
+    return { key: "decor_panel", scale: 0.72, alpha: 0.66 };
+  }
+
+  function drawDungeonImageDecoration(ctx, game, kind, gx, gy, px, py, t, visible) {
+    if (!FEATURES.dungeonDecorV17516 || !FEATURES.dungeonDecorImagesV17519 || !visible || kind !== TILE.FLOOR) return false;
+    if (World.isLiftAt(game, gx, gy) || World.isCoreAt(game, gx, gy) || World.isTerminalAt(game, gx, gy)) return false;
+    if (game.returnPoint && game.returnPoint.x === gx && game.returnPoint.y === gy) return false;
+    if (FEATURES.dungeonReadabilityV17518 && dungeonNearImportantObject(game, gx, gy, 1)) return false;
+    if (World.getItemAt(game, gx, gy) || World.getTrapAt(game, gx, gy)) return false;
+
+    const baseDensity = CONFIG.dungeonDecorationDensity ?? 0.075;
+    const nearWall = Object.values(dungeonNeighbors(game, gx, gy, "blocked")).some(Boolean);
+    const roomMultiplier = FEATURES.dungeonRoomTypesV17520 ? dungeonRoomDecorMultiplier(game, gx, gy) : 1.0;
+    const wallMultiplier = FEATURES.dungeonReadabilityV17518 && nearWall ? 0.62 : 1.0;
+    const density = baseDensity * roomMultiplier * wallMultiplier;
+    const roll = (dungeonCoordHash(gx, gy, 161) % 1000) / 1000;
+    if (roll > density) return false;
+
+    const variantRoll = dungeonCoordHash(gx, gy, 173) % 100;
+    const meta = FEATURES.dungeonRoomTypesV17520
+      ? dungeonDecorMetaForRoom(game, gx, gy, variantRoll)
+      : dungeonDecorMetaForRoom({ rooms: [], roomMap: [] }, gx, gy, variantRoll);
+
+    const spriteKey = `dungeonDecor:${meta.key}`;
+    if (!FEATURES.imageSprites || !spriteReady(spriteKey)) return false;
+
+    const img = SPRITES[spriteKey];
+    const flip = (dungeonCoordHash(gx, gy, 181) % 2) === 0 ? 1 : -1;
+    const rot = (dungeonCoordHash(gx, gy, 191) % 4) * Math.PI * 0.5;
+    const jitterX = (((dungeonCoordHash(gx, gy, 197) % 1000) / 1000) - 0.5) * t * 0.10;
+    const jitterY = (((dungeonCoordHash(gx, gy, 199) % 1000) / 1000) - 0.5) * t * 0.10;
+    const scaleJitter = (((dungeonCoordHash(gx, gy, 211) % 1000) / 1000) - 0.5) * 0.08;
+    const size = t * clamp(meta.scale + scaleJitter, 0.56, 0.96);
+    ctx.save();
+    ctx.translate(px + t * 0.5 + jitterX, py + t * 0.5 + jitterY);
+    ctx.rotate(rot);
+    ctx.scale(flip, 1);
+    ctx.globalAlpha = clamp(meta.alpha * (FEATURES.dungeonReadabilityV17518 ? 0.94 : 1.0), 0.24, 0.88);
+    ctx.drawImage(img, -size * 0.5, -size * 0.5, size, size);
+    ctx.restore();
+    return true;
+  }
+
+  function drawDungeonProceduralDecoration(ctx, game, kind, gx, gy, px, py, t, visible) {
+    if (drawDungeonImageDecoration(ctx, game, kind, gx, gy, px, py, t, visible)) return;
+    if (!FEATURES.dungeonDecorV17516 || !visible || kind !== TILE.FLOOR) return;
+    if (World.isLiftAt(game, gx, gy) || World.isCoreAt(game, gx, gy) || World.isTerminalAt(game, gx, gy)) return;
+    if (game.returnPoint && game.returnPoint.x === gx && game.returnPoint.y === gy) return;
+    if (FEATURES.dungeonReadabilityV17518 && dungeonNearImportantObject(game, gx, gy, 1)) return;
+    if (World.getItemAt(game, gx, gy) || World.getTrapAt(game, gx, gy)) return;
+    const baseDensity = CONFIG.dungeonDecorationDensity ?? 0.075;
+    const nearWall = Object.values(dungeonNeighbors(game, gx, gy, "blocked")).some(Boolean);
+    const roomMultiplier = FEATURES.dungeonRoomTypesV17520 ? dungeonRoomDecorMultiplier(game, gx, gy) : 1.0;
+    const wallMultiplier = FEATURES.dungeonReadabilityV17518 && nearWall ? 0.62 : 1.0;
+    const density = baseDensity * roomMultiplier * wallMultiplier;
+    const roll = (dungeonCoordHash(gx, gy, 161) % 1000) / 1000;
+    if (roll > density) return;
+
+    const variant = dungeonCoordHash(gx, gy, 173) % 4;
+    const flip = (dungeonCoordHash(gx, gy, 181) % 2) === 0 ? 1 : -1;
+    const rot = (dungeonCoordHash(gx, gy, 191) % 4) * Math.PI * 0.5;
+    ctx.save();
+    ctx.translate(px + t * 0.5, py + t * 0.5);
+    ctx.rotate(rot);
+    ctx.scale(flip, 1);
+    ctx.globalAlpha = FEATURES.dungeonReadabilityV17518 ? 0.54 : 0.72;
+
+    if (variant === 0) {
+      ctx.fillStyle = "rgba(122,72,36,0.30)";
+      ctx.beginPath();
+      ctx.ellipse(-t * 0.12, t * 0.04, t * 0.22, t * 0.075, 0.25, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(210,126,54,0.17)";
+      ctx.lineWidth = Math.max(1, t * 0.025);
+      ctx.beginPath();
+      ctx.moveTo(-t * 0.30, t * 0.08);
+      ctx.quadraticCurveTo(-t * 0.04, t * 0.16, t * 0.22, -t * 0.02);
+      ctx.stroke();
+    } else if (variant === 1) {
+      ctx.strokeStyle = "rgba(36,24,18,0.58)";
+      ctx.lineWidth = Math.max(2, t * 0.045);
+      ctx.beginPath();
+      ctx.moveTo(-t * 0.34, t * 0.18);
+      ctx.bezierCurveTo(-t * 0.16, t * 0.02, t * 0.10, t * 0.30, t * 0.34, t * 0.06);
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(148,87,52,0.46)";
+      ctx.lineWidth = Math.max(1, t * 0.018);
+      ctx.stroke();
+    } else if (variant === 2) {
+      ctx.fillStyle = "rgba(68,62,52,0.64)";
+      ctx.strokeStyle = "rgba(210,205,185,0.14)";
+      ctx.lineWidth = Math.max(1, t * 0.016);
+      ctx.beginPath();
+      ctx.moveTo(-t * 0.20, -t * 0.10);
+      ctx.lineTo(t * 0.06, -t * 0.17);
+      ctx.lineTo(t * 0.20, t * 0.02);
+      ctx.lineTo(-t * 0.06, t * 0.15);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    } else {
+      ctx.strokeStyle = "rgba(12,10,8,0.55)";
+      ctx.lineWidth = Math.max(1, t * 0.032);
+      ctx.beginPath();
+      ctx.moveTo(-t * 0.28, -t * 0.12);
+      ctx.lineTo(t * 0.25, -t * 0.02);
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(112,72,48,0.42)";
+      ctx.lineWidth = Math.max(1, t * 0.018);
+      ctx.beginPath();
+      ctx.moveTo(-t * 0.18, t * 0.12);
+      ctx.lineTo(t * 0.28, t * 0.20);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawDungeonTile(ctx, game, kind, gx, gy, px, py, t, visible) {
+    if (drawDungeonObjectTile(ctx, game, kind, gx, gy, px, py, t, visible)) return true;
+    const choice = dungeonTileChoice(game, kind, gx, gy);
+    if (!choice) return false;
+    const key = `dungeonTile:${choice.key}`;
+    if (!FEATURES.imageSprites || !spriteReady(key)) return false;
+    const img = SPRITES[key];
+    ctx.save();
+    const turns = ((choice.turns || 0) % 4 + 4) % 4;
+    if (turns) {
+      ctx.translate(px + t * 0.5, py + t * 0.5);
+      ctx.rotate(turns * Math.PI * 0.5);
+      ctx.drawImage(img, -t * 0.5, -t * 0.5, t, t);
+    } else {
+      ctx.drawImage(img, px, py, t, t);
+    }
+    ctx.restore();
+
+    if (choice.kind === "floor") {
+      drawDungeonFloorEdgeShadows(ctx, game, gx, gy, px, py, t, visible);
+      drawDungeonProceduralDecoration(ctx, game, kind, gx, gy, px, py, t, visible);
+    } else if (choice.kind === "wall" || choice.kind === "void") {
+      drawDungeonWallTone(ctx, game, gx, gy, px, py, t, visible, choice);
+    }
+
+    if (!visible) {
+      ctx.save();
+      ctx.fillStyle = choice.kind === "void" ? "rgba(0,0,0,0.52)" : "rgba(0,0,0,0.46)";
+      ctx.fillRect(px, py, t, t);
+      ctx.restore();
     }
     return true;
   }
@@ -998,7 +1477,7 @@ const Visuals = (() => {
     drawDamagePopup(ctx, cx, cy, t, progress, opts.damage, type);
   }
 
-  return { glyph, tile, item, enemy, npc, player, trap, fx, assetStatus, getAsset, drawAssetBackground, drawSceneTile };
+  return { glyph, tile, item, enemy, npc, player, trap, fx, assetStatus, getAsset, drawAssetBackground, drawSceneTile, drawDungeonTile };
 })();
 
 
@@ -1333,45 +1812,42 @@ function createRenderer(elements) {
   function drawWalkabilityBrightnessOverlay(game, kind, px, py, t, visible) {
     const walkable = isWalkableVisualTile(kind);
     ctx.save();
-    if (game.screen === "base") {
-      if (walkable) {
-        if (kind === TILE.ENTRANCE) {
-          ctx.fillStyle = visible ? "rgba(255,205,118,0.28)" : "rgba(255,205,118,0.12)";
-          ctx.fillRect(px - 1, py - 1, t + 2, t + 2);
-          ctx.strokeStyle = visible ? "rgba(255,238,178,0.55)" : "rgba(255,238,178,0.18)";
-          ctx.lineWidth = 2;
-          ctx.strokeRect(px + 1, py + 1, t - 2, t - 2);
-        } else {
-          ctx.fillStyle = visible ? "rgba(255,232,188,0.13)" : "rgba(255,232,188,0.055)";
-          ctx.fillRect(px, py, t, t);
-          ctx.strokeStyle = visible ? "rgba(255,246,218,0.14)" : "rgba(255,246,218,0.045)";
-          ctx.lineWidth = 1;
-          ctx.strokeRect(px + 0.5, py + 0.5, t - 1, t - 1);
-        }
-      } else {
-        ctx.fillStyle = visible ? "rgba(0,0,0,0.36)" : "rgba(0,0,0,0.58)";
-        ctx.fillRect(px, py, t, t);
-        ctx.fillStyle = visible ? "rgba(50,36,26,0.10)" : "rgba(0,0,0,0.18)";
-        ctx.fillRect(px + 1, py + 1, t - 2, t - 2);
-      }
-    } else {
-      if (walkable) {
-        ctx.fillStyle = visible ? "rgba(150,220,235,0.11)" : "rgba(86,135,150,0.045)";
-        ctx.fillRect(px, py, t, t);
-        ctx.strokeStyle = visible ? "rgba(220,250,255,0.12)" : "rgba(110,150,160,0.04)";
-        ctx.lineWidth = 1;
-        ctx.strokeRect(px + 0.5, py + 0.5, t - 1, t - 1);
-      } else {
-        ctx.fillStyle = visible ? "rgba(0,0,0,0.48)" : "rgba(0,0,0,0.70)";
-        ctx.fillRect(px, py, t, t);
-        ctx.fillStyle = visible ? "rgba(12,18,22,0.18)" : "rgba(0,0,0,0.22)";
-        ctx.fillRect(px + 1, py + 1, t - 2, t - 2);
-      }
+
+    // v17.5.12: 旧仕様の「薄いブロック/格子」感を消す。
+    // strokeRect や内側1pxの矩形は使わず、背景画像の上に明暗だけをなじませる。
+    if (kind === TILE.ENTRANCE) {
+      const g = ctx.createRadialGradient(px + t * 0.50, py + t * 0.50, t * 0.12, px + t * 0.50, py + t * 0.50, t * 0.78);
+      g.addColorStop(0, visible ? "rgba(255,221,150,0.30)" : "rgba(255,221,150,0.14)");
+      g.addColorStop(1, "rgba(255,221,150,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(px - t * 0.15, py - t * 0.15, t * 1.30, t * 1.30);
+      ctx.restore();
+      return;
     }
+
+    if (game.screen === "base") {
+      ctx.fillStyle = walkable
+        ? (visible ? "rgba(255,238,205,0.075)" : "rgba(255,238,205,0.028)")
+        : (visible ? "rgba(0,0,0,0.34)" : "rgba(0,0,0,0.56)");
+    } else {
+      ctx.fillStyle = walkable
+        ? (visible ? "rgba(155,225,238,0.065)" : "rgba(90,140,155,0.028)")
+        : (visible ? "rgba(0,0,0,0.46)" : "rgba(0,0,0,0.68)");
+    }
+    ctx.fillRect(px, py, t, t);
     ctx.restore();
   }
 
-  function drawEnhancedTile(game, kind, px, py, t, visible) {
+  function drawEnhancedTile(game, kind, tx, ty, px, py, t, visible) {
+    if (game.screen === "run" && Visuals.drawDungeonTile && Visuals.drawDungeonTile(ctx, game, kind, tx, ty, px, py, t, visible)) {
+      if (kind === TILE.FLOOR || kind === TILE.WALL) return;
+      ctx.save();
+      ctx.globalAlpha = 0.88;
+      Visuals.tile(ctx, kind, px, py, t, visible);
+      ctx.restore();
+      return;
+    }
+
     drawWalkabilityBrightnessOverlay(game, kind, px, py, t, visible);
     if (kind === TILE.FLOOR || kind === TILE.WALL) return;
     ctx.save();
@@ -1538,6 +2014,135 @@ function createRenderer(elements) {
     ctx.restore();
   }
 
+  function drawSmallWorldLabel(text, sub, cx, topY, t, options = {}) {
+    const labelW = Math.max(t * 2.8, options.width || 106);
+    const labelH = sub ? 42 : 30;
+    const lx = clamp(cx - labelW / 2, 4, view.cols * t - labelW - 4);
+    const ly = clamp(topY - labelH, 6, view.rows * t - labelH - 6);
+    ctx.save();
+    ctx.fillStyle = options.fill || "rgba(9,12,15,0.84)";
+    ctx.fillRect(lx, ly, labelW, labelH);
+    ctx.strokeStyle = options.stroke || "rgba(160,210,230,0.72)";
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(lx + 0.5, ly + 0.5, labelW - 1, labelH - 1);
+    ctx.fillStyle = options.text || "rgba(235,246,255,0.96)";
+    ctx.font = `bold ${Math.max(12, Math.floor(t * 0.27))}px system-ui`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, lx + labelW / 2, ly + (sub ? 14 : labelH / 2));
+    if (sub) {
+      ctx.fillStyle = options.subText || "rgba(205,220,226,0.86)";
+      ctx.font = `${Math.max(10, Math.floor(t * 0.21))}px system-ui`;
+      ctx.fillText(sub, lx + labelW / 2, ly + 31);
+    }
+    ctx.restore();
+  }
+
+  function drawRunGuides(game, toScreen, t, now) {
+    if (game.screen !== "run") return;
+    const pulse = 0.5 + 0.5 * Math.sin((now || 0) / 250);
+    const width = view.cols * t;
+    const height = view.rows * t;
+
+    function marker(pos, title, sub, color, strong = false) {
+      if (!pos) return;
+      const s = toScreen(pos.x, pos.y);
+      if (s.px < -t || s.py < -t || s.px > width || s.py > height) return;
+      const cx = s.px + t * 0.5;
+      const cy = s.py + t * 0.5;
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.fillStyle = color.glow || `rgba(110,210,255,${0.10 + pulse * 0.10})`;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, t * (strong ? 1.45 : 1.05), t * (strong ? 0.92 : 0.72), 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = color.stroke || "rgba(130,220,255,0.88)";
+      ctx.lineWidth = strong ? 3 : 2;
+      if (FEATURES.dungeonReadabilityV17518) {
+        const inset = t * 0.12;
+        const len = t * (strong ? 0.24 : 0.18);
+        const x0 = s.px + inset;
+        const y0 = s.py + inset;
+        const x1 = s.px + t - inset;
+        const y1 = s.py + t - inset;
+        ctx.beginPath();
+        ctx.moveTo(x0, y0 + len); ctx.lineTo(x0, y0); ctx.lineTo(x0 + len, y0);
+        ctx.moveTo(x1 - len, y0); ctx.lineTo(x1, y0); ctx.lineTo(x1, y0 + len);
+        ctx.moveTo(x0, y1 - len); ctx.lineTo(x0, y1); ctx.lineTo(x0 + len, y1);
+        ctx.moveTo(x1 - len, y1); ctx.lineTo(x1, y1); ctx.lineTo(x1, y1 - len);
+        ctx.stroke();
+      } else {
+        ctx.strokeRect(s.px + t * 0.12, s.py + t * 0.12, t * 0.76, t * 0.76);
+      }
+      ctx.restore();
+      const distance = chebyshev(game.player.x, game.player.y, pos.x, pos.y);
+      const compactLabels = FEATURES.mobileDungeonUiV17521 && view.mode === "mobile";
+      const labelTitle = compactLabels
+        ? (title === "搬送リフト" ? "リフト" : title === "浄水コア" ? "コア" : title === "帰還地点" ? "帰還" : title === "出発地点" ? (FEATURES.oneWayDungeonV17524 ? "出発" : "帰還") : title)
+        : title;
+      const labelSub = compactLabels ? "" : sub;
+      const mobileLabelDistance = FEATURES.explorationTempoV17523 ? 1 : 2;
+      if ((!compactLabels && strong) || distance <= (compactLabels ? mobileLabelDistance : 4)) {
+        drawSmallWorldLabel(labelTitle, labelSub, cx, s.py - t * 0.15, t, color.label || {});
+      }
+    }
+
+    const rp = game.returnPoint;
+    if (rp && game.explored?.[rp.y]?.[rp.x]) {
+      const nearReturn = chebyshev(game.player.x, game.player.y, rp.x, rp.y) <= 4;
+      marker(rp, game.returnPointLeft ? (FEATURES.oneWayDungeonV17524 ? "閉鎖隔壁" : "帰還地点") : "出発地点", game.returnPointLeft ? (FEATURES.oneWayDungeonV17524 ? "戻れない" : "戻ると帰還") : (FEATURES.oneWayDungeonV17524 ? "下層へ進む" : "危険時はここへ"), {
+        glow: `rgba(115,220,255,${0.12 + pulse * 0.12})`,
+        stroke: nearReturn ? "rgba(190,245,255,0.96)" : "rgba(120,210,245,0.78)",
+        label: { stroke: "rgba(130,220,245,0.78)", text: "rgba(232,252,255,0.96)" }
+      }, nearReturn);
+    }
+
+    if (game.lift?.active && game.visible?.[game.lift.y]?.[game.lift.x]) {
+      marker(game.lift, "搬送リフト", "深度を進める", {
+        glow: `rgba(255,208,85,${0.12 + pulse * 0.15})`,
+        stroke: "rgba(255,224,120,0.92)",
+        label: { fill: "rgba(18,14,8,0.86)", stroke: "rgba(255,218,112,0.78)", text: "rgba(255,242,196,0.96)" }
+      }, true);
+    }
+
+    if (game.core?.active && !game.core.acquired && game.visible?.[game.core.y]?.[game.core.x]) {
+      marker(game.core, "浄水コア", "最終目標", {
+        glow: `rgba(90,210,255,${0.18 + pulse * 0.18})`,
+        stroke: "rgba(170,238,255,0.96)",
+        label: { stroke: "rgba(140,230,255,0.86)", text: "rgba(232,252,255,0.98)" }
+      }, true);
+    }
+  }
+
+  function drawRunIntroOverlay(game, width, height, now) {
+    if (game.screen !== "run" || !game.runIntroUntil) return;
+    const remaining = game.runIntroUntil - Date.now();
+    if (remaining <= 0) return;
+    const alpha = clamp(Math.min(1, remaining / 1200), 0, 1);
+    const compact = FEATURES.mobileDungeonUiV17521 && view.mode === "mobile";
+    const panelW = Math.min(width - 20, compact ? 230 : 340);
+    const panelH = compact ? 50 : 74;
+    const x = (width - panelW) / 2;
+    const y = Math.max(8, height * (compact ? 0.055 : 0.08));
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = "rgba(8,10,12,0.84)";
+    ctx.fillRect(x, y, panelW, panelH);
+    ctx.strokeStyle = "rgba(136,212,235,0.72)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x + 1, y + 1, panelW - 2, panelH - 2);
+    ctx.fillStyle = "rgba(238,250,255,0.98)";
+    ctx.font = compact ? "bold 14px system-ui" : "bold 17px system-ui";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillText(`深度${game.depth}`, x + 16, y + 12);
+    ctx.font = compact ? "11px system-ui" : "12px system-ui";
+    ctx.fillStyle = "rgba(220,236,242,0.94)";
+    const line = game.depth >= CONFIG.maxDepth ? "端末→防衛機→コア" : "リフトへ。危険なら帰還";
+    ctx.fillText(line, x + 16, y + (compact ? 31 : 43));
+    ctx.restore();
+  }
+
   function getIntentVisual(enemy) {
     const kind = enemy?.intent?.kind || "melee";
     if (kind === "laser") return { color: "rgba(255,92,72,0.92)", chip: "砲" };
@@ -1689,7 +2294,7 @@ function createRenderer(elements) {
     if (shake.x || shake.y) ctx.translate(shake.x, shake.y);
     const backgroundKey = game.screen === "title" ? "title" : game.screen === "base" ? "base" : "dungeon";
     Visuals.drawAssetBackground(ctx, backgroundKey, 0, 0, cols * t, rows * t, "#05070b", "#020203");
-    const backgroundShade = game.screen === "title" ? 0.26 : game.screen === "base" ? 0.10 : 0.18;
+    const backgroundShade = game.screen === "title" ? 0.26 : game.screen === "base" ? 0.10 : 0.08;
     ctx.fillStyle = `rgba(0,0,0,${backgroundShade})`;
     ctx.fillRect(0, 0, cols * t, rows * t);
 
@@ -1709,15 +2314,17 @@ function createRenderer(elements) {
         const px = sx * t - fracX;
         const py = sy * t - fracY;
         if (!game.explored[ty]?.[tx]) {
-          ctx.fillStyle = "#020304";
+          ctx.fillStyle = game.screen === "run" ? "#010304" : "#020304";
           ctx.fillRect(px, py, t, t);
-          ctx.fillStyle = "rgba(12,18,24,0.18)";
-          ctx.fillRect(px + 1, py + 1, t - 2, t - 2);
+          if (game.screen !== "run") {
+            ctx.fillStyle = "rgba(12,18,24,0.10)";
+            ctx.fillRect(px, py, t, t);
+          }
           continue;
         }
         const visible = Boolean(game.visible[ty]?.[tx]);
-        drawSceneBackdropCell(game, tx, ty, px, py, t, visible);
-        drawEnhancedTile(game, game.map[ty][tx], px, py, t, visible);
+        if (game.screen !== "run") drawSceneBackdropCell(game, tx, ty, px, py, t, visible);
+        drawEnhancedTile(game, game.map[ty][tx], tx, ty, px, py, t, visible);
       }
     }
 
@@ -1725,6 +2332,7 @@ function createRenderer(elements) {
 
     drawSettlementProps(game, toScreen, t, now);
     drawSettlementEntranceGuide(game, toScreen, t, now);
+    drawRunGuides(game, toScreen, t, now);
 
     for (const trap of game.traps) {
       if (!trap.active || !trap.discovered) continue;
@@ -1785,6 +2393,7 @@ function createRenderer(elements) {
     }
 
     drawFloorEventOverlay(game, cols * t, rows * t, now);
+    drawRunIntroOverlay(game, cols * t, rows * t, now);
     drawEntranceTransitionOverlay(game, cols * t, rows * t, now);
 
     const vignette = ctx.createRadialGradient(cols * t * 0.5, rows * t * 0.5, Math.min(cols, rows) * t * 0.2, cols * t * 0.5, rows * t * 0.5, Math.max(cols, rows) * t * 0.62);
@@ -1850,7 +2459,8 @@ function createRenderer(elements) {
 
   function renderLog(game) {
     clearNode(logPanel);
-    const latest = game.logs.slice(0, 3);
+    const maxLines = FEATURES.explorationTempoV17523 && view.mode === "mobile" && game.screen === "run" ? 1 : 3;
+    const latest = game.logs.slice(0, maxLines);
     for (const message of latest) appendLine(logPanel, message);
   }
 
@@ -1876,13 +2486,22 @@ function createRenderer(elements) {
     const floorEvent = FLOOR_EVENT_DEFS[game.floorEvent]?.name || "通常稼働";
     const terminals = game.terminals?.length ? ` / 端末 ${game.disabledTerminals || 0}/${game.terminals.length}` : "";
     const objective = game.depth >= CONFIG.maxDepth
-      ? (game.terminals?.some(t => t.active) ? "目的: 防衛端末を停止" : game.enemies.some(e => e.type === "guardian") ? "目的: 中枢防衛機を停止" : "目的: 浄水コアを回収")
-      : "目的: 搬送リフトを探して深度を進める";
+      ? (game.terminals?.some(t => t.active) ? "目的: 端末停止" : game.enemies.some(e => e.type === "guardian") ? "目的: 防衛機停止" : "目的: コア回収")
+      : "目的: リフト探索";
+    const returnGuide = !FEATURES.oneWayDungeonV17524 && game.returnPoint && chebyshev(game.player.x, game.player.y, game.returnPoint.x, game.returnPoint.y) <= 4 ? "｜帰還地点近く" : "";
     const selected = game.inventory[game.selectedIndex] ? ` / 選択 ${game.selectedIndex + 1}:${getItemName(game, game.inventory[game.selectedIndex])}` : " / 選択 なし";
     if (view.mode === "mobile") {
-      statusText.textContent = `${objective}｜深度${game.depth}/${CONFIG.maxDepth}｜敵${game.enemies.length}｜${floorEvent}${terminals}${selected}${state}`;
+      const shortObjective = game.depth >= CONFIG.maxDepth
+        ? (game.terminals?.some(t => t.active) ? "端末" : game.enemies.some(e => e.type === "guardian") ? "防衛機" : "コア")
+        : "リフト";
+      const roomId = game.roomMap?.[game.player.y]?.[game.player.x] ?? -1;
+      const room = roomId >= 0 ? game.rooms?.[roomId] : null;
+      const roomType = FEATURES.dungeonRoomTypesV17520 && room?.roomType && room.roomType !== "normal" ? `｜${ROOM_TYPE_DEFS[room.roomType]?.short || room.roomType}` : "";
+      statusText.textContent = FEATURES.explorationTempoV17523
+        ? `D${game.depth} ${shortObjective}${returnGuide ? " 帰還近" : ""} 敵${game.enemies.length}${roomType ? " " + roomType.replace("｜", "") : ""}`
+        : `D${game.depth}/${CONFIG.maxDepth}｜${shortObjective}${returnGuide ? "｜帰還近" : ""}｜敵${game.enemies.length}${roomType}`;
     } else {
-      statusText.textContent = `${objective}｜難易度 ${currentDifficulty().name}｜深度 ${game.depth}/${CONFIG.maxDepth}｜ターン ${game.turn}｜敵 ${game.enemies.length}｜全域 ${floorEvent}${terminals}｜装備 ${weapon}/${armor}｜開拓 ${countExplored(game)}${selected}${state}`;
+      statusText.textContent = `${objective}${returnGuide}｜難易度 ${currentDifficulty().name}｜深度 ${game.depth}/${CONFIG.maxDepth}｜ターン ${game.turn}｜敵 ${game.enemies.length}｜全域 ${floorEvent}${terminals}｜装備 ${weapon}/${armor}｜開拓 ${countExplored(game)}${selected}${state}`;
     }
     if (debugText) {
       debugText.textContent = `debug: ${view.mode} ${view.cols}x${view.rows} dpr${view.dpr} / gen ${game.debug.generationCount} / rooms ${game.rooms.length} / visible ${game.debug.visibleCount} / enemyTurn ${game.debug.enemyTurnCount} / fx ${Array.isArray(game.fx) ? game.fx.length : 0} / traps ${game.traps.length} / path ${game.debug.pathCheckCount}`;
@@ -1952,6 +2571,7 @@ function createRenderer(elements) {
     const floorEvent = FLOOR_EVENT_DEFS[game.floorEvent]?.name || "通常稼働";
     appendLine(basePanel, `全域: ${floorEvent}`, "selected-line");
     appendLine(basePanel, game.depth >= CONFIG.maxDepth ? `端末 ${game.disabledTerminals || 0}/${game.terminals?.length || 0}` : `深度 ${game.depth}/${CONFIG.maxDepth}`);
+    appendLine(basePanel, FEATURES.oneWayDungeonV17524 ? "進行: 一本道。リフトで下層へ。通常移動では戻れない。" : "帰還: 青白い出発地点へ戻る / 緊急帰還タグを使う", "muted-line");
     appendLine(basePanel, `発掘回数 ${game.settlement.runs} / 最深 ${game.settlement.bestDepth}`);
     const open = Object.values(MISSION_DEFS).filter(m => !game.completedMissions[m.key]).slice(0, 2);
     for (const mission of open) appendLine(basePanel, `依頼: ${mission.title}`);
@@ -2030,9 +2650,10 @@ function createRenderer(elements) {
       const floorEvent = FLOOR_EVENT_DEFS[game.floorEvent]?.name || "通常稼働";
       const floorDesc = FLOOR_EVENT_DEFS[game.floorEvent]?.desc || "特別な異常はない。";
       const terminals = game.terminals?.length ? `${game.disabledTerminals || 0}/${game.terminals.length}` : "なし";
-      appendPanelLine(game.depth >= CONFIG.maxDepth ? "目的: 端末停止 → 防衛機停止 → 浄水コア回収。" : "目的: 搬送リフトを探し、深度を進める。", "menu-line");
-      appendPanelLine(`フロアイベント: ${floorEvent} - ${floorDesc}`);
-      appendPanelLine(`端末: ${terminals} / 敵: ${game.enemies.length} / 罠発動: ${game.debug.trapTriggeredCount}`);
+      appendPanelLine(game.depth >= CONFIG.maxDepth ? "端末→防衛機→コア。" : "リフトを探す。", "menu-line");
+      appendPanelLine(FEATURES.oneWayDungeonV17524 ? "戻れない。撤退は帰還タグ/P。" : "帰還は青白い地点。拾う=中央。", "muted-line");
+      appendPanelLine(`${floorEvent}: ${floorDesc}`);
+      appendPanelLine(`端末 ${terminals} / 敵 ${game.enemies.length} / 罠 ${game.debug.trapTriggeredCount}`);
       appendButtons([
         { label: "所持品", cmd: "inventory" },
         { label: "投げる", cmd: "throw" },
@@ -2076,12 +2697,10 @@ function createRenderer(elements) {
     if (game.helpOpen) {
       screenPanel.classList.add("compact-menu-screen");
       h.textContent = "ヘルプ / 操作説明";
-      appendPanelLine("スマホ: キャンバス全体を見えない9分割エリアとして扱う。押した位置の方向へ移動し、中央は足踏み/足元の遺物取得。", "menu-line");
-      appendPanelLine("NPCや敵のいる方向へ進むと、会話または攻撃を自動実行する。");
-      appendPanelLine("PC: 矢印/WASDで移動、斜めはQ/E/Z/Cまたはテンキー、.で足踏み。");
-      appendPanelLine("足元の遺物: 中央タップまたはG / 所持品: I / 選択: 1〜8または[ ] / 使用: U / 置く: X / 投げる: T / 調べる: F");
-      appendPanelLine("拠点: B / 探索メニュー: M / 途中帰還: P / 記録: L / 新規発掘: N");
-      appendPanelLine("目的: 深度5で防衛端末を停止し、中枢防衛機を止め、浄水コアを回収する。地図は歩いて開拓する。");
+      appendPanelLine("スマホ: 画面9分割で移動。中央=足踏み/拾う。", "menu-line");
+      appendPanelLine("敵やNPCの方向へ進むと攻撃/会話。");
+      appendPanelLine("目的: リフトで進む。最深部は端末→防衛機→コア。");
+      appendPanelLine(FEATURES.oneWayDungeonV17524 ? "戻れない。撤退は帰還タグ/P。PCはWASD/矢印、M。" : "帰還: 青白い地点か帰還タグ。PCはWASD/矢印、Mでメニュー。");
       appendButtons([{ label: "閉じる", cmd: "close" }]);
       return;
     }
@@ -2134,8 +2753,8 @@ function createRenderer(elements) {
       h.textContent = "初回ガイド";
       appendPanelLine("まずは部屋を出て通路を進み、見える範囲を広げる。", "menu-line");
       appendPanelLine("敵は常にこちらを把握しているわけではない。角を曲がる、通路に誘う、アイテムで止める判断が重要。");
-      appendPanelLine("落ちている遺物は「拾う」で取得。所持品から選んで使う・投げる・置く。");
-      appendPanelLine("浄水コア回収が本目的。途中帰還は記録に残るが、アイテムは持ち帰らない。");
+      appendPanelLine("落ちている遺物は足元で中央タップして取得。所持品から選んで使う・投げる・置く。");
+      appendPanelLine(FEATURES.oneWayDungeonV17524 ? "本目的は浄水コア。通常移動では戻れない。撤退は帰還タグ/P。" : "浄水コア回収が本目的。帰還地点または帰還タグで戻れる。途中帰還は記録に残るが、アイテムは持ち帰らない。");
       appendButtons([{ label: "はじめる", cmd: "start" }]);
       return;
     }

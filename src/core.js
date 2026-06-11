@@ -1,6 +1,6 @@
 // --- config.js ---
-const VERSION = "v17.5.10";
-const FEATURE_LEVEL = 1759;
+const VERSION = "v17.5.24";
+const FEATURE_LEVEL = 1773;
 
 const FEATURES = {
   items: true,
@@ -65,7 +65,20 @@ const FEATURES = {
   settlementWalkMapV1743: true,
   settlementLifeSceneV1750: true,
   entranceSequenceV1750: true,
-  attackTelegraphV1750: true
+  attackTelegraphV1750: true,
+  runEntryGuidanceV17511: true,
+  softWalkabilityV17512: true,
+  dungeonTileTuningV17514: true,
+  dungeonSpecialObjectsV17515: true,
+  dungeonDecorV17516: true,
+  conciseDungeonGuidanceV17517: true,
+  dungeonReadabilityV17518: true,
+  dungeonDecorImagesV17519: true,
+  dungeonRoomTypesV17520: true,
+  mobileDungeonUiV17521: true,
+  dungeonBalanceV17523: true,
+  explorationTempoV17523: true,
+  oneWayDungeonV17524: true
 };
 
 const TILE = {
@@ -87,7 +100,7 @@ const CONFIG = {
   viewportWidthMobile: 9,
   viewportHeightMobile: 9,
   mobileBreakpoint: 760,
-  moveAnimMs: 135,
+  moveAnimMs: 96,
   fxMs: 720,
   combatAnimMs: 360,
   screenShakePx: 4.0,
@@ -97,40 +110,58 @@ const CONFIG = {
   maxDevicePixelRatio: 2,
   sightRadius: 7,
   corridorSightRadius: 2,
-  roomTargetCount: 12,
+  roomTargetCount: 8,
   roomMinSize: 4,
   roomMaxSize: 10,
-  roomAttemptLimit: 260,
+  roomAttemptLimit: 180,
   mapGenerateRetryLimit: 16,
   minRequiredRooms: 4,
   maxLogLines: 9,
-  enemyBaseCount: 5,
-  enemyMaxCount: 16,
+  enemyBaseCount: 3,
+  enemyMaxCount: 11,
   enemyMinPlayerDistance: 6,
   playerAttackDamage: 2,
   maxDepth: 5,
   inventoryLimit: 8,
-  itemBaseCount: 9,
-  itemMaxCount: 15,
+  itemBaseCount: 5,
+  itemMaxCount: 10,
   maxHunger: 100,
   pollutionLimit: 100,
   settlementStorageKey: "haikiso-no-hakkutsuka-runmeta-v10",
   settingsStorageKey: "haikiso-no-hakkutsuka-settings-v10",
   runLogMax: 8,
-  trapBaseCount: 5,
-  trapMaxCount: 14,
+  trapBaseCount: 3,
+  trapMaxCount: 8,
   throwRange: 7,
   enemySightRadius: 7,
   enemyMemoryTurns: 8,
   baseUpgradeCost: 12,
   maxBaseLevel: 5,
-  roomEventChance: 0.72,
+  roomEventChance: 0.42,
   bossMinionLimit: 3,
-  floorEventChance: 0.85,
+  floorEventChance: 0.58,
   bossTerminalCount: 3,
   maxRecentFloorEvents: 6,
   settlementNpcStepChance: 0.55,
-  entranceSequenceStepMs: 520
+  entranceSequenceStepMs: 520,
+  runIntroDurationMs: 2200,
+  dungeonDecorationDensity: 0.044,
+  dungeonObjectScale: {
+    return_point_tile: 0.90,
+    lift_tile: 0.94,
+    terminal_tile: 0.88,
+    core_pedestal_tile: 0.92
+  },
+  dungeonBalance: {
+    goalDistanceRatio: 0.52,
+    firstDepthGoalDistanceRatio: 0.46,
+    finalDepthGoalDistanceRatio: 0.66,
+    maxGlobalPollution: 7,
+    maxRoomTypeExtraEnemies: 1,
+    maxRoomTypeExtraItems: 1,
+    specialRoomCap: 2,
+    firstDepthSpecialRoomCap: 1
+  }
 };
 
 
@@ -266,6 +297,13 @@ const ROOM_EVENT_DEFS = {
   blackout: { type: "blackout", name: "停電区画", desc: "照明が死んで視界が狭い。" },
   storage: { type: "storage", name: "保管庫", desc: "部品類が比較的まとまって残る。" },
   dismantle: { type: "dismantle", name: "解体中区画", desc: "壁や通路が不安定で、構造が少しずつ変わる。" }
+};
+
+const ROOM_TYPE_DEFS = {
+  normal: { type: "normal", name: "通常部屋", short: "通常", log: "通常部屋。", decor: 1.0, enemy: 1.0, item: 1.0 },
+  scrap: { type: "scrap", name: "廃材部屋", short: "廃材", log: "廃材部屋。少し物資あり。", decor: 1.18, enemy: 0.92, item: 1.12 },
+  terminal: { type: "terminal", name: "端末部屋", short: "端末", log: "端末部屋。警備注意。", decor: 1.02, enemy: 1.12, item: 0.98 },
+  polluted: { type: "polluted", name: "汚染部屋", short: "汚染", log: "汚染部屋。踏み込みすぎない。", decor: 1.08, enemy: 1.02, item: 0.78 }
 };
 
 const FLOOR_EVENT_DEFS = {
@@ -739,7 +777,11 @@ const GameState = (() => {
       hasStarted: false,
       missions: Object.values(MISSION_DEFS).map(m => m.key),
       completedMissions: {},
-      settlement: createDefaultSettlement()
+      settlement: createDefaultSettlement(),
+      runIntroUntil: 0,
+      runIntroShown: false,
+      returnPoint: null,
+      returnPointLeft: false
     };
   }
 
@@ -1223,6 +1265,13 @@ const MapSystem = (() => {
     return count;
   }
 
+  function roomHash(x, y, salt = 0) {
+    let v = ((x + 31) * 73856093) ^ ((y + 17) * 19349663) ^ ((salt + 101) * 83492791);
+    v = Math.imul(v ^ (v >>> 16), 2246822507);
+    v = Math.imul(v ^ (v >>> 13), 3266489909);
+    return (v ^ (v >>> 16)) >>> 0;
+  }
+
   function buildFallbackMap(game) {
     game.map = GameState.createEmptyMap();
     game.roomMap = GameState.createRoomMap();
@@ -1291,17 +1340,90 @@ const MapSystem = (() => {
 
   function getGoalRoom(game) {
     if (game.rooms.length <= 1) return game.rooms[0];
-    let best = game.rooms[game.rooms.length - 1];
-    let bestDistance = -1;
+    if (FEATURES.oneWayDungeonV17524) {
+      const ratio = game.depth <= 1
+        ? (CONFIG.dungeonBalance?.firstDepthGoalDistanceRatio ?? 0.46)
+        : game.depth >= CONFIG.maxDepth
+          ? (CONFIG.dungeonBalance?.finalDepthGoalDistanceRatio ?? 0.66)
+          : (CONFIG.dungeonBalance?.goalDistanceRatio ?? 0.52);
+      const maxIndex = game.rooms.length - 1;
+      const minIndex = Math.min(maxIndex, game.depth >= CONFIG.maxDepth ? 3 : 2);
+      const index = clamp(Math.round(maxIndex * ratio), minIndex, maxIndex);
+      return game.rooms[index] || game.rooms[maxIndex];
+    }
     const start = game.rooms[0];
-    for (const room of game.rooms.slice(1)) {
-      const distance = manhattan(start.centerX, start.centerY, room.centerX, room.centerY);
-      if (distance > bestDistance) {
-        best = room;
-        bestDistance = distance;
+    const candidates = game.rooms.slice(1).map(room => ({
+      room,
+      distance: manhattan(start.centerX, start.centerY, room.centerX, room.centerY)
+    }));
+    if (!FEATURES.explorationTempoV17523) {
+      return candidates.sort((a, b) => b.distance - a.distance)[0]?.room || game.rooms[game.rooms.length - 1];
+    }
+    const maxDistance = Math.max(...candidates.map(c => c.distance), 1);
+    const ratio = game.depth <= 1
+      ? (CONFIG.dungeonBalance?.firstDepthGoalDistanceRatio ?? 0.56)
+      : game.depth >= CONFIG.maxDepth
+        ? (CONFIG.dungeonBalance?.finalDepthGoalDistanceRatio ?? 0.76)
+        : (CONFIG.dungeonBalance?.goalDistanceRatio ?? 0.64);
+    const target = clamp(Math.round(maxDistance * ratio), 8, maxDistance);
+    let best = candidates[0];
+    let bestScore = Infinity;
+    for (const candidate of candidates) {
+      const distancePenalty = Math.abs(candidate.distance - target);
+      const tieBreaker = game.depth >= CONFIG.maxDepth ? -candidate.distance * 0.05 : candidate.distance * 0.03;
+      const score = distancePenalty + tieBreaker;
+      if (score < bestScore) {
+        best = candidate;
+        bestScore = score;
       }
     }
-    return best;
+    return best?.room || candidates.sort((a, b) => b.distance - a.distance)[0]?.room || game.rooms[game.rooms.length - 1];
+  }
+
+  function setRoomType(room, type) {
+    const key = ROOM_TYPE_DEFS[type] ? type : "normal";
+    room.roomType = key;
+    room.decorDensity = ROOM_TYPE_DEFS[key].decor;
+    return room;
+  }
+
+  function assignRoomTypes(game) {
+    if (!FEATURES.dungeonRoomTypesV17520) {
+      for (const room of game.rooms) setRoomType(room, "normal");
+      return;
+    }
+    const goalRoom = getGoalRoom(game);
+    const cap = FEATURES.oneWayDungeonV17524
+      ? (game.depth <= 1 ? (CONFIG.dungeonBalance?.firstDepthSpecialRoomCap ?? 1) : (CONFIG.dungeonBalance?.specialRoomCap ?? 2))
+      : 99;
+    let specialCount = 0;
+    let lastSpecial = false;
+    for (let i = 0; i < game.rooms.length; i++) {
+      const room = game.rooms[i];
+      if (i === 0 || room === goalRoom || i > game.rooms.indexOf(goalRoom)) {
+        setRoomType(room, "normal");
+        lastSpecial = false;
+        continue;
+      }
+      if (FEATURES.oneWayDungeonV17524 && (specialCount >= cap || lastSpecial)) {
+        setRoomType(room, "normal");
+        lastSpecial = false;
+        continue;
+      }
+      const roll = roomHash(room.centerX, room.centerY, 521) % 100;
+      let type = "normal";
+      if (game.depth >= CONFIG.maxDepth && roll < 22) type = "terminal";
+      else if (roll < 11) type = "scrap";
+      else if (roll < 19) type = "terminal";
+      else if (roll < (game.depth >= 3 ? 29 : 24)) type = "polluted";
+      setRoomType(room, type);
+      lastSpecial = type !== "normal";
+      if (lastSpecial) specialCount++;
+    }
+  }
+
+  function roomsByType(game, type) {
+    return game.rooms.filter((room, index) => index > 0 && room.roomType === type);
   }
 
   function placePlayer(game) {
@@ -1309,6 +1431,9 @@ const MapSystem = (() => {
     game.player.x = startRoom.centerX;
     game.player.y = startRoom.centerY;
     game.player.lastDir = { x: 1, y: 0 };
+    game.returnPoint = { x: game.player.x, y: game.player.y };
+    game.returnPointLeft = false;
+    game.map[game.player.y][game.player.x] = TILE.ENTRANCE;
   }
 
   function safeTileInRoom(game, room) {
@@ -1346,13 +1471,15 @@ const MapSystem = (() => {
     game.disabledTerminals = 0;
     if (!FEATURES.bossTerminals || !game.core.active) return;
     const goalRoom = getGoalRoom(game);
-    const preferredRooms = shuffle(game.rooms.filter(room => room !== game.rooms[0] && room !== goalRoom));
-    const rooms = [...preferredRooms, goalRoom];
+    const terminalRooms = shuffle(roomsByType(game, "terminal").filter(room => room !== goalRoom));
+    const otherRooms = shuffle(game.rooms.filter(room => room !== game.rooms[0] && room !== goalRoom && room.roomType !== "terminal"));
+    const rooms = [...terminalRooms, ...otherRooms, goalRoom];
     for (const room of rooms) {
       if (game.terminals.length >= CONFIG.bossTerminalCount) break;
       const pos = randomFloorInRoom(game, room);
       if (!pos) continue;
       game.map[pos.y][pos.x] = TILE.TERMINAL;
+      setRoomType(room, "terminal");
       game.terminals.push({ x: pos.x, y: pos.y, active: true });
     }
     while (game.terminals.length < CONFIG.bossTerminalCount) {
@@ -1400,9 +1527,14 @@ const MapSystem = (() => {
   }
 
   function addPollutionTiles(game) {
-    const count = Math.min(18, 3 + game.depth * 2);
+    const cap = CONFIG.dungeonBalance?.maxGlobalPollution ?? 10;
+    const count = FEATURES.oneWayDungeonV17524
+      ? Math.min(cap, game.depth <= 1 ? 1 : Math.ceil(game.depth * 1.2))
+      : FEATURES.dungeonBalanceV17523
+        ? Math.min(cap, game.depth <= 1 ? 2 : 2 + game.depth)
+        : Math.min(18, 3 + game.depth * 2);
     for (let i = 0; i < count; i++) {
-      const pos = findFreeFloorTile(game, { avoidItems: true, avoidTraps: true });
+      const pos = findFreeFloorTile(game, { minPlayerDistance: 4, avoidItems: true, avoidTraps: true });
       if (pos) game.map[pos.y][pos.x] = TILE.POLLUTION;
     }
   }
@@ -1468,23 +1600,27 @@ const MapSystem = (() => {
     if (!FEATURES.floorEvents) return;
     const event = game.floorEvent;
     if (event === "supply_scatter") {
-      for (let i = 0; i < 4; i++) {
+      const supplyCount = FEATURES.oneWayDungeonV17524 ? 1 : FEATURES.dungeonBalanceV17523 ? 2 : 4;
+      for (let i = 0; i < supplyCount; i++) {
         const pos = findFreeFloorTile(game, { minPlayerDistance: 3, avoidItems: true, avoidTraps: true });
         if (pos) game.items.push({ kind: chance(0.5) ? "nutrition_block" : "identify_scanner", x: pos.x, y: pos.y });
       }
-      for (let i = 0; i < 3; i++) {
-        const pos = findFreeFloorTile(game, { minPlayerDistance: 4, avoidItems: true, avoidTraps: true });
+      const supplyTrapCount = FEATURES.oneWayDungeonV17524 ? 1 : FEATURES.dungeonBalanceV17523 ? 2 : 3;
+      for (let i = 0; i < supplyTrapCount; i++) {
+        const pos = findFreeFloorTile(game, { minPlayerDistance: 5, avoidItems: true, avoidTraps: true });
         if (pos) game.traps.push({ type: chance(0.5) ? "shutter" : "alarm", x: pos.x, y: pos.y, active: true, discovered: !FEATURES.hiddenTraps });
       }
     } else if (event === "pollution_leak") {
-      for (let i = 0; i < 8; i++) {
+      const leakCount = FEATURES.oneWayDungeonV17524 ? 2 : FEATURES.dungeonBalanceV17523 ? 4 : 8;
+      for (let i = 0; i < leakCount; i++) {
         const pos = findFreeFloorTile(game, { minPlayerDistance: 4, avoidItems: true, avoidTraps: true });
         if (pos) game.map[pos.y][pos.x] = TILE.POLLUTION;
       }
     } else if (event === "dismantle_shift") {
       weakenRandomWalls(game, 6);
     } else if (event === "security_sweep") {
-      for (let i = 0; i < 2; i++) {
+      const sweepCount = FEATURES.oneWayDungeonV17524 ? 1 : FEATURES.dungeonBalanceV17523 ? 1 : 2;
+      for (let i = 0; i < sweepCount; i++) {
         const room = game.rooms[randInt(1, Math.max(1, game.rooms.length - 1))];
         if (room) addEnemyToRoom(game, room, chance(0.5) ? "hunter" : "soldier");
       }
@@ -1518,24 +1654,128 @@ const MapSystem = (() => {
     game.enemies.push({ type: def.type, name: def.name, glyph: def.glyph, x: pos.x, y: pos.y, hp, maxHp: hp, attack, stun: 0, state: "idle", memory: 0, lastSeen: null, carriedItem: null });
   }
 
+  function applyRoomTypePlacement(game) {
+    if (!FEATURES.dungeonRoomTypesV17520) return;
+    const goalRoom = getGoalRoom(game);
+    const extraEnemyCap = (CONFIG.enemyMaxCount || 14) + (CONFIG.dungeonBalance?.maxRoomTypeExtraEnemies ?? 2);
+    const itemSoftCap = (CONFIG.itemMaxCount || 12) + (CONFIG.dungeonBalance?.maxRoomTypeExtraItems ?? 2);
+    const addTypeItem = (room, kind, odds = 1) => {
+      if (game.items.length >= itemSoftCap || !chance(odds)) return;
+      addItemToRoom(game, room, kind);
+    };
+    const addTypeEnemy = (room, type, odds = 1) => {
+      if (game.enemies.length >= extraEnemyCap || !chance(odds)) return;
+      addEnemyToRoom(game, room, type);
+    };
+    for (const [index, room] of game.rooms.entries()) {
+      if (index === 0 || room === goalRoom) continue;
+      const type = room.roomType || "normal";
+      if (type === "scrap") {
+        addTypeItem(room, chance(0.58) ? "scrap_parts" : "battery_cell", FEATURES.oneWayDungeonV17524 ? 0.48 : 0.70);
+        addTypeItem(room, chance(0.5) ? "nutrition_block" : "utility_blade", FEATURES.oneWayDungeonV17524 ? 0.08 : 0.16);
+        addTypeEnemy(room, chance(0.55) ? "logistics" : "cleaner", FEATURES.oneWayDungeonV17524 ? 0.16 : 0.25);
+      } else if (type === "terminal") {
+        addTypeItem(room, chance(0.55) ? "identify_scanner" : "broken_terminal", FEATURES.oneWayDungeonV17524 ? 0.40 : 0.58);
+        addTypeItem(room, chance(0.5) ? "signal_jammer" : "emp_can", FEATURES.oneWayDungeonV17524 ? 0.07 : 0.14);
+        addTypeEnemy(room, game.depth >= 3 ? (chance(0.55) ? "soldier" : "hunter") : "hunter", FEATURES.oneWayDungeonV17524 ? 0.58 : 0.72);
+      } else if (type === "polluted") {
+        const pollutionCount = FEATURES.oneWayDungeonV17524 ? randInt(1, 3) : FEATURES.dungeonBalanceV17523 ? randInt(2, 4) : randInt(3, 6);
+        for (let i = 0; i < pollutionCount; i++) {
+          const pos = randomFloorInRoom(game, room);
+          if (pos && !World.isPlayerAt(game, pos.x, pos.y)) game.map[pos.y][pos.x] = TILE.POLLUTION;
+        }
+        addTypeItem(room, chance(0.62) ? "water_filter" : "detox_kit", FEATURES.oneWayDungeonV17524 ? 0.42 : 0.56);
+        addTypeEnemy(room, game.depth >= 3 ? (chance(0.5) ? "medic" : "cleaner") : "cleaner", FEATURES.oneWayDungeonV17524 ? 0.24 : 0.36);
+      }
+    }
+  }
+
+  function trimGeneratedBalance(game) {
+    if (!FEATURES.dungeonBalanceV17523) return;
+    const isProtected = (x, y) => World.isPlayerAt(game, x, y) || World.isLiftAt(game, x, y) || World.isCoreAt(game, x, y) || World.isTerminalAt(game, x, y);
+    const enemyCap = Math.max(4, CONFIG.enemyMaxCount + (game.depth >= CONFIG.maxDepth ? 2 : 0) - (FEATURES.oneWayDungeonV17524 && game.depth <= 2 ? 1 : 0));
+    const normalEnemies = game.enemies.filter(enemy => enemy.type !== "guardian");
+    if (normalEnemies.length > enemyCap) {
+      const keep = new Set(
+        normalEnemies
+          .sort((a, b) => manhattan(b.x, b.y, game.player.x, game.player.y) - manhattan(a.x, a.y, game.player.x, game.player.y))
+          .slice(0, enemyCap)
+          .map(enemy => enemy.id || `${enemy.type}:${enemy.x},${enemy.y}`)
+      );
+      game.enemies = game.enemies.filter(enemy => enemy.type === "guardian" || keep.has(enemy.id || `${enemy.type}:${enemy.x},${enemy.y}`));
+    }
+    const itemCap = CONFIG.itemMaxCount + (FEATURES.oneWayDungeonV17524 ? 0 : 2);
+    if (game.items.length > itemCap) {
+      game.items = game.items
+        .sort((a, b) => manhattan(b.x, b.y, game.player.x, game.player.y) - manhattan(a.x, a.y, game.player.x, game.player.y))
+        .slice(0, itemCap);
+    }
+    if (game.traps.length > CONFIG.trapMaxCount) {
+      game.traps = game.traps
+        .sort((a, b) => manhattan(b.x, b.y, game.player.x, game.player.y) - manhattan(a.x, a.y, game.player.x, game.player.y))
+        .slice(0, CONFIG.trapMaxCount);
+    }
+    const polluted = [];
+    for (let y = 1; y < CONFIG.mapHeight - 1; y++) {
+      for (let x = 1; x < CONFIG.mapWidth - 1; x++) {
+        if (game.map[y][x] !== TILE.POLLUTION || isProtected(x, y)) continue;
+        const roomId = game.roomMap?.[y]?.[x] ?? -1;
+        const room = roomId >= 0 ? game.rooms[roomId] : null;
+        polluted.push({ x, y, priority: room?.roomType === "polluted" ? 1 : 0, hash: roomHash(x, y, 733) });
+      }
+    }
+    const cap = CONFIG.dungeonBalance?.maxGlobalPollution ?? 10;
+    if (polluted.length > cap) {
+      polluted.sort((a, b) => (a.priority - b.priority) || (b.hash - a.hash));
+      for (const pos of polluted.slice(0, polluted.length - cap)) game.map[pos.y][pos.x] = TILE.FLOOR;
+    }
+  }
+
+  function placeStarterSupplies(game) {
+    if (!FEATURES.runEntryGuidanceV17511 || game.depth !== 1 || !game.rooms.length) return;
+    const kinds = ["nutrition_block", "return_tag"];
+    const candidates = [];
+    const room = game.rooms[0];
+    for (let y = room.y; y < room.y + room.height; y++) {
+      for (let x = room.x; x < room.x + room.width; x++) {
+        if (!World.isWalkable(game, x, y)) continue;
+        if (World.getTile(game, x, y) !== TILE.FLOOR) continue;
+        if (World.isPlayerAt(game, x, y) || World.isBlockedByEntity(game, x, y)) continue;
+        if (World.getItemAt(game, x, y) || World.getTrapAt(game, x, y)) continue;
+        const d = manhattan(game.player.x, game.player.y, x, y);
+        if (d < 1 || d > 4) continue;
+        candidates.push({ x, y, d });
+      }
+    }
+    candidates.sort((a, b) => a.d - b.d);
+    const used = new Set(game.items.map(item => `${item.x},${item.y}`));
+    for (const kind of kinds) {
+      const pos = candidates.find(c => !used.has(`${c.x},${c.y}`));
+      if (!pos) continue;
+      game.items.push({ kind, x: pos.x, y: pos.y, id: World.nextId("starter") });
+      used.add(`${pos.x},${pos.y}`);
+    }
+  }
+
   function applyRoomEvents(game) {
     if (!FEATURES.roomEvents) return;
     for (const room of game.rooms) {
       if (!room.event) continue;
       if (room.event === "supply") {
         addItemToRoom(game, room, chance(0.5) ? "scrap_parts" : "nutrition_block");
-        addItemToRoom(game, room, chance(0.5) ? "battery_cell" : "water_filter");
+        if ((!FEATURES.dungeonBalanceV17523 || chance(0.35)) && (!FEATURES.oneWayDungeonV17524 || chance(0.45))) addItemToRoom(game, room, chance(0.5) ? "battery_cell" : "water_filter");
       } else if (room.event === "polluted") {
-        for (let i = 0; i < 5; i++) {
+        const roomPollution = FEATURES.oneWayDungeonV17524 ? 2 : FEATURES.dungeonBalanceV17523 ? 3 : 5;
+        for (let i = 0; i < roomPollution; i++) {
           const pos = randomFloorInRoom(game, room);
           if (pos) game.map[pos.y][pos.x] = TILE.POLLUTION;
         }
         addItemToRoom(game, room, chance(0.5) ? "detox_kit" : "scrap_parts");
       } else if (room.event === "security") {
-        addEnemyToRoom(game, room, chance(0.5) ? "hunter" : "soldier");
+        if (!FEATURES.dungeonBalanceV17523 || chance(FEATURES.oneWayDungeonV17524 ? 0.54 : 0.72)) addEnemyToRoom(game, room, chance(0.5) ? "hunter" : "soldier");
       } else if (room.event === "storage") {
         addItemToRoom(game, room, "scrap_parts");
-        addItemToRoom(game, room, chance(0.5) ? "utility_blade" : "work_armor");
+        if (!FEATURES.dungeonBalanceV17523 || chance(FEATURES.oneWayDungeonV17524 ? 0.24 : 0.45)) addItemToRoom(game, room, chance(0.5) ? "utility_blade" : "work_armor");
       } else if (room.event === "dismantle") {
         weakenRandomWalls(game, 3);
       }
@@ -1547,7 +1787,13 @@ const MapSystem = (() => {
     if (roomId < 0 || roomId === game.currentRoomId) return;
     game.currentRoomId = roomId;
     const room = game.rooms[roomId];
-    if (!room || !room.event || game.visitedRoomEvents[roomId]) return;
+    if (!room) return;
+    if (FEATURES.dungeonRoomTypesV17520 && room.roomType && room.roomType !== "normal" && !game.visitedRoomTypes[roomId]) {
+      game.visitedRoomTypes[roomId] = true;
+      const typeDef = ROOM_TYPE_DEFS[room.roomType];
+      if (typeDef) World.addLog(game, typeDef.log);
+    }
+    if (!room.event || game.visitedRoomEvents[roomId]) return;
     game.visitedRoomEvents[roomId] = true;
     const def = ROOM_EVENT_DEFS[room.event];
     if (!def) return;
@@ -1596,6 +1842,7 @@ const MapSystem = (() => {
     game.lure = null;
     game.currentRoomId = -1;
     game.visitedRoomEvents = {};
+    game.visitedRoomTypes = {};
     game.pendingExtract = false;
     game.terminals = [];
     game.disabledTerminals = 0;
@@ -1609,25 +1856,34 @@ const MapSystem = (() => {
     if (!success) buildFallbackMap(game);
     placePlayer(game);
     placeLiftOrCore(game);
+    assignRoomTypes(game);
     placeBossTerminals(game);
     assignRoomEvents(game);
     addPollutionTiles(game);
     ItemSystem.placeItems(game, findFreeFloorTile, chooseWeighted);
     TrapSystem.placeTraps(game, findFreeFloorTile);
     EnemySystem.placeEnemies(game, findFreeFloorTile, chooseWeighted);
+    applyRoomTypePlacement(game);
     applyRoomEvents(game);
     applyFloorEvent(game);
+    trimGeneratedBalance(game);
+    placeStarterSupplies(game);
     game.debug.floorCount = countFloors(game);
     if (!validateGeneratedState(game)) {
       buildFallbackMap(game);
       placePlayer(game);
       placeLiftOrCore(game);
+      assignRoomTypes(game);
       placeBossTerminals(game);
       assignRoomEvents(game);
       ItemSystem.placeItems(game, findFreeFloorTile, chooseWeighted);
       TrapSystem.placeTraps(game, findFreeFloorTile);
       EnemySystem.placeEnemies(game, findFreeFloorTile, chooseWeighted);
+      applyRoomTypePlacement(game);
       applyRoomEvents(game);
+      applyFloorEvent(game);
+      trimGeneratedBalance(game);
+      placeStarterSupplies(game);
       validateGeneratedState(game);
     }
     VisibilitySystem.reset(game);
