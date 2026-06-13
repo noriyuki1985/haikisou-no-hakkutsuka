@@ -1,63 +1,153 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>廃棄層の発掘家 v17.5.27</title>
-  <link rel="stylesheet" href="style.css?v=17.5.27">
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; base-uri 'none'; form-action 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0e1114">
+<title>廃棄層の発掘家 v18.0.0</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <main class="game">
-    <section class="panel">
-      <h1>廃棄層の発掘家 <span id="versionText" class="ver">Version: v17.5.27</span></h1>
-      <div class="bars">
-        <div class="bar"><span class="bar-label">HP</span><span class="bar-track"><span id="hpFill" class="bar-fill"></span></span><span id="hpText" class="bar-val">-</span></div>
-        <div class="bar"><span class="bar-label">空腹</span><span class="bar-track"><span id="hungerFill" class="bar-fill"></span></span><span id="hungerText" class="bar-val">-</span></div>
-        <div class="bar"><span class="bar-label">汚染</span><span class="bar-track"><span id="pollutionFill" class="bar-fill"></span></span><span id="pollutionText" class="bar-val">-</span></div>
+<div id="app">
+  <!-- ローディング -->
+  <div id="loading-screen" class="screen">
+    <div class="loading-inner">
+      <div class="loading-logo">廃棄層の<br>発掘家</div>
+      <div class="loading-bar"><div id="loading-fill"></div></div>
+      <div id="loading-text" class="loading-text">アセットを読み込み中…</div>
+    </div>
+  </div>
+
+  <!-- タイトル画面 -->
+  <div id="title-screen" class="screen hidden">
+    <img id="title-bg" src="assets/bg/title.jpg" alt="">
+    <div class="title-inner">
+      <div class="title-eyebrow">SALVAGE REGISTER // DEPTH B30F</div>
+      <h1 class="title-logo">廃棄層の<br>発掘家</h1>
+      <div class="title-sub">― 水を、連れて帰る ―</div>
+      <div class="title-menu">
+        <button id="btn-newgame" class="title-btn">はじめから</button>
+        <button id="btn-continue" class="title-btn" disabled>つづきから</button>
       </div>
-      <p id="statusText" class="status">深度 1 / HP 10/10</p>
-      <p id="debugText" class="debug">debug: -</p>
-    </section>
+      <div class="title-record" id="title-record"></div>
+      <div class="title-ver">v18.0.0</div>
+    </div>
+  </div>
 
-    <section class="screen-panel" id="screenPanel" hidden></section>
+  <!-- イントロ -->
+  <div id="intro-screen" class="screen hidden">
+    <div id="intro-text" class="intro-text"></div>
+    <div class="intro-hint">タップで進む</div>
+  </div>
 
-    <section class="play-area">
-      <div class="game-stage">
-        <canvas id="gameCanvas" width="672" height="480"></canvas>
-        <div class="tap-zones" id="tapZones" aria-hidden="true">
-          <span class="tap-zone" data-tap-dir="-1,-1"></span>
-          <span class="tap-zone" data-tap-dir="0,-1"></span>
-          <span class="tap-zone" data-tap-dir="1,-1"></span>
-          <span class="tap-zone" data-tap-dir="-1,0"></span>
-          <span class="tap-zone" data-tap-dir="0,0"></span>
-          <span class="tap-zone" data-tap-dir="1,0"></span>
-          <span class="tap-zone" data-tap-dir="-1,1"></span>
-          <span class="tap-zone" data-tap-dir="0,1"></span>
-          <span class="tap-zone" data-tap-dir="1,1"></span>
+  <!-- ゲーム本体 -->
+  <div id="game-screen" class="screen hidden">
+    <div id="hud">
+      <div class="hud-cell hud-floor"><span id="hud-floor">集落</span></div>
+      <div class="hud-cell hud-hp">
+        <span class="hud-label">HP</span>
+        <div class="bar"><div id="hp-bar" class="bar-fill hp"></div></div>
+        <span id="hud-hp" class="hud-num">15/15</span>
+      </div>
+      <div class="hud-cell hud-lv"><span class="hud-label">Lv</span><span id="hud-lv" class="hud-num">1</span></div>
+      <div class="hud-cell hud-belly">
+        <span class="hud-label">満腹</span>
+        <div class="bar"><div id="belly-bar" class="bar-fill belly"></div></div>
+      </div>
+      <button id="btn-mute" class="hud-btn" aria-label="サウンド切替">♪</button>
+    </div>
+
+    <div id="canvas-wrap">
+      <canvas id="game-canvas"></canvas>
+      <canvas id="minimap"></canvas>
+      <div id="floor-banner" class="hidden"></div>
+      <div id="log"></div>
+      <div id="objective"></div>
+    </div>
+
+    <div id="action-bar">
+      <button id="btn-inv" class="act-btn">道具<span class="act-sub" id="inv-count">0/12</span></button>
+      <button id="btn-foot" class="act-btn">足元</button>
+      <button id="btn-wait" class="act-btn">待機</button>
+      <button id="btn-menu" class="act-btn">他</button>
+    </div>
+  </div>
+
+  <!-- 道具モーダル -->
+  <div id="inv-modal" class="modal hidden">
+    <div class="modal-panel">
+      <div class="modal-title">持ち物 <span id="inv-modal-count"></span></div>
+      <div id="inv-list" class="inv-list"></div>
+      <div id="inv-actions" class="inv-actions hidden">
+        <div id="inv-desc" class="inv-desc"></div>
+        <div class="inv-action-row">
+          <button id="ia-use" class="ia-btn">使う</button>
+          <button id="ia-throw" class="ia-btn">投げる</button>
+          <button id="ia-drop" class="ia-btn">置く</button>
         </div>
       </div>
-      <aside class="side">
-        <h2>ミニマップ</h2>
-        <canvas id="miniMapCanvas" width="240" height="160"></canvas>
-        <p class="note">未踏破は黒。踏破済みのみ表示。</p>
-      </aside>
-    </section>
+      <button id="inv-close" class="modal-close">閉じる</button>
+    </div>
+  </div>
 
-    <section class="mobile-item-bar" id="mobileItemBar" aria-label="スマホ用所持品操作"></section>
+  <!-- 汎用ダイアログ -->
+  <div id="dialog" class="modal hidden">
+    <div class="modal-panel dialog-panel">
+      <div id="dialog-text" class="dialog-text"></div>
+      <div id="dialog-buttons" class="dialog-buttons"></div>
+    </div>
+  </div>
 
-    <section class="hud">
-      <section class="box" id="inventoryPanel"><h2>所持品</h2><p>なし</p></section>
-      <section class="box" id="basePanel"><h2>拠点</h2><p>未集計</p></section>
-      <section class="box" id="codexPanel"><h2>記録</h2><p>未記録</p></section>
-      <section class="box log" id="logPanel"><p>発掘家は再構成された廃棄区域に足を踏み入れた。</p></section>
-    </section>
+  <!-- 会話ウィンドウ -->
+  <div id="talk" class="hidden">
+    <div class="talk-name" id="talk-name"></div>
+    <div class="talk-text" id="talk-text"></div>
+    <div class="talk-hint">タップで進む</div>
+  </div>
 
-    <p class="hint">スマホ基準: 画面を見えない9分割エリアとして扱う。住人や敵のいる方向へ進むと会話または攻撃。集落東側の廃棄層入口へ向かって進むと進入。廃棄層は一本道。足元の遺物は中央タップで拾う。選択中アイテムは中央タップまたは所持品バーの「使う」で使用。</p>
-  </main>
+  <!-- メニュー -->
+  <div id="menu-modal" class="modal hidden">
+    <div class="modal-panel">
+      <div class="modal-title">メニュー</div>
+      <div class="menu-list">
+        <button id="m-help" class="menu-btn">あそびかた</button>
+        <button id="m-record" class="menu-btn">発掘記録</button>
+        <button id="m-giveup" class="menu-btn danger">探索をあきらめる</button>
+        <button id="m-title" class="menu-btn danger">タイトルへ戻る</button>
+      </div>
+      <button id="menu-close" class="modal-close">閉じる</button>
+    </div>
+  </div>
 
-  <script src="src/core.js?v=17.5.27"></script>
-  <script src="src/systems.js?v=17.5.27"></script>
-  <script src="src/ui.js?v=17.5.27"></script>
-  <script src="src/game.js?v=17.5.27"></script>
+  <!-- 投げる方向選択 -->
+  <div id="dir-overlay" class="hidden">
+    <div class="dir-msg" id="dir-msg">どの方向に投げる?</div>
+    <div class="dir-grid">
+      <button data-d="7">↖</button><button data-d="8">↑</button><button data-d="9">↗</button>
+      <button data-d="4">←</button><button data-d="0" id="dir-cancel">×</button><button data-d="6">→</button>
+      <button data-d="1">↙</button><button data-d="2">↓</button><button data-d="3">↘</button>
+    </div>
+  </div>
+
+  <!-- リザルト -->
+  <div id="result-screen" class="screen hidden">
+    <div class="result-inner">
+      <div id="result-title" class="result-title"></div>
+      <div id="result-body" class="result-body"></div>
+      <button id="result-ok" class="title-btn">集落へ戻る</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/rng.js"></script>
+<script src="js/config.js"></script>
+<script src="js/assets.js"></script>
+<script src="js/sprites.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/dungeon.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/input.js"></script>
+<script src="js/game.js"></script>
 </body>
 </html>
