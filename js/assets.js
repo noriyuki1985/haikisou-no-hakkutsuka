@@ -46,10 +46,8 @@ const ASSETS = {
     "item.equip":    "assets/items/equipment.png",
     "item.tactical": "assets/items/tactical.png",
     "item.unknown":  "assets/items/unknown.png",
-    // 背景
+    // 背景(タイトルのみ。集落はタイル構築、ダンジョンはタイル構築)
     "bg.title":   "assets/bg/title.jpg",
-    "bg.village": "assets/bg/base.jpg",
-    "bg.dungeon": "assets/bg/dungeon.jpg",
     // エフェクト
     "fx.slash":     "assets/fx/slash.png",
     "fx.spark":     "assets/fx/spark.png",

@@ -5,9 +5,27 @@
 "use strict";
 const INPUT = {
   canvas: null,
-  holdTimer: null, holdDir: 0,
+  holdTimer: null, holdDir: 0, holding: false,
   lastTapTime: 0, lastTapDir: 0,
+  HOLD_DELAY: 320,   // 押してから連続移動が始まるまでの猶予(ms)
+  HOLD_STEP: 165,    // 連続移動の1歩あたりの最短間隔(ms)
   enabled: true,
+
+  _stopHold(){
+    this.holding = false;
+    if (this.holdTimer){ clearTimeout(this.holdTimer); this.holdTimer = null; }
+  },
+  // 指を離すまで、行動可能になるたびに1歩ずつ進める(間隔は HOLD_STEP 以上)
+  _holdTick(){
+    if (!this.holding || !this.enabled){ this._stopHold(); return; }
+    if (this.h.canAct()){
+      this.h.step(this.holdDir);
+      this.holdTimer = setTimeout(() => this._holdTick(), this.HOLD_STEP);
+    } else {
+      // まだ前の動作中。少し待って再確認(動作完了直後に次の1歩)
+      this.holdTimer = setTimeout(() => this._holdTick(), 30);
+    }
+  },
 
   init(canvas, handlers){
     this.canvas = canvas;
@@ -23,26 +41,26 @@ const INPUT = {
         this.h.foot();
         return;
       }
-      // ダブルタップ判定
+      // ダブルタップ判定(同方向を素早く2回 → ダッシュ)
       if (now - this.lastTapTime < 280 && this.lastTapDir === dir){
         this.lastTapTime = 0;
+        this._stopHold();
         this.h.dash(dir);
         return;
       }
       this.lastTapTime = now;
       this.lastTapDir = dir;
+      // まず1歩
       this.h.step(dir);
-      // 長押しリピート
+      // 長押しリピート: 押し続けている時だけ、十分な間隔を空けて継続
       this.holdDir = dir;
-      clearInterval(this.holdTimer);
-      this.holdTimer = setInterval(() => {
-        if (!this.enabled || !this.h.canAct()){ return; }
-        // 指の現在位置から方向を更新できないため、押下時の方向を継続
-        this.h.step(this.holdDir);
-      }, 60);
+      this.holding = true;
+      this._stopHold();
+      // 初回は長めに待つ(チョン押しで連続移動にならないように)
+      this.holdTimer = setTimeout(() => this._holdTick(), this.HOLD_DELAY);
     }, { passive:false });
 
-    const stopHold = () => { clearInterval(this.holdTimer); this.holdTimer = null; };
+    const stopHold = () => this._stopHold();
     canvas.addEventListener("pointerup", stopHold);
     canvas.addEventListener("pointercancel", stopHold);
     canvas.addEventListener("pointerleave", stopHold);

@@ -377,7 +377,7 @@ const GAME = {
       if (inRoom !== (aheadRoom >= 0)) return;           // 部屋⇔通路の境界
       if (!inRoom && this._openNeighbors(p.x,p.y) >= 3) return; // 分岐
       if (this._anyEnemyVisible()) return;
-      setTimeout(run, CONFIG.STEP_MS * 0.85);
+      setTimeout(run, CONFIG.STEP_MS * 1.0);
     };
     run();
   },
@@ -1317,8 +1317,8 @@ const GAME = {
   _drawActor(ctx, gx, gy, tp, portrait, opts){
     opts = opts || {};
     const scale = opts.scale || 1;
-    // 立ち絵は「1マス幅より少し大きく」「足元をマスの底に」
-    const baseH = tp * 1.7 * scale;       // 高さはマスの1.7倍(立ち絵として見栄え)
+    // 立ち絵は「1マス幅より少し大きい」程度に抑える(密集しても重なりにくく)
+    const baseH = tp * 1.25 * scale;      // 高さはマスの1.25倍
     let drawH = baseH, drawW, aspect = 208/256;
     if (portrait){
       aspect = portrait.width / portrait.height;
@@ -1421,24 +1421,37 @@ const GAME = {
 
   _drawVillage(ctx, x0, x1, y0, y1, tp, now, frame){
     const v = this.st.village;
-    const hasBg = !!bgImage("village");
-    // 床タイルを常に敷く(背景画像が無い/読めない場合の保険にもなる)
+    // 集落はタイルのみで構築(固定背景は使わない)
     for (let y = Math.max(0,y0); y <= Math.min(v.H-1,y1); y++){
       for (let x = Math.max(0,x0); x <= Math.min(v.W-1,x1); x++){
         ctx.drawImage(tileSprite(v.kind[y][x], x, y), x*tp, y*tp, tp, tp);
       }
     }
-    // 背景イラストを半透明で重ね、世界観の密度を足す
-    if (hasBg){
-      this._drawBgLayer(ctx, v, tp, 0.78);
-      // 重ねた後、壁・水・門だけ再度くっきり描く
-      for (let y = Math.max(0,y0); y <= Math.min(v.H-1,y1); y++){
-        for (let x = Math.max(0,x0); x <= Math.min(v.W-1,x1); x++){
-          const k = v.kind[y][x];
-          if (k === "grass" || k === "path") continue;
-          ctx.drawImage(tileSprite(k, x, y), x*tp, y*tp, tp, tp);
-        }
-      }
+    // 焚き火のゆらめき(中央広場)
+    if (v.campfire){
+      const [cfx, cfy] = v.campfire;
+      const fl = 0.7 + 0.3*Math.sin(now/120) + 0.1*Math.sin(now/57);
+      ctx.globalAlpha = fl;
+      ctx.fillStyle = "#ff9d3a";
+      const fx = (cfx+0.5)*tp, fy = (cfy+0.55)*tp;
+      ctx.beginPath();
+      ctx.moveTo(fx, fy - tp*0.32*fl);
+      ctx.quadraticCurveTo(fx - tp*0.16, fy, fx, fy + tp*0.1);
+      ctx.quadraticCurveTo(fx + tp*0.16, fy, fx, fy - tp*0.32*fl);
+      ctx.fill();
+      ctx.fillStyle = "#ffd24a";
+      ctx.globalAlpha = fl;
+      ctx.beginPath();
+      ctx.arc(fx, fy, tp*0.1*fl, 0, Math.PI*2);
+      ctx.fill();
+      // 灯りのにじみ
+      const grad = ctx.createRadialGradient(fx, fy, tp*0.1, fx, fy, tp*2.2);
+      grad.addColorStop(0, "rgba(255,160,60,0.16)");
+      grad.addColorStop(1, "rgba(255,160,60,0)");
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = grad;
+      ctx.fillRect(fx - tp*2.2, fy - tp*2.2, tp*4.4, tp*4.4);
+      ctx.globalAlpha = 1;
     }
     // 東門の明滅矢印
     const g = v.gate;
@@ -1603,7 +1616,7 @@ const GAME = {
     // primed の赤オーバーレイ
     if (e.primed && portrait){
       const footX = (e.anim.fx+0.5)*tp, footY = (e.anim.fy+0.95)*tp;
-      const dh = tp*1.7*scale, dw = dh*(portrait.width/portrait.height);
+      const dh = tp*1.25*scale, dw = dh*(portrait.width/portrait.height);
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
       ctx.globalAlpha = 0.3*Math.abs(Math.sin(now/80));
@@ -1613,7 +1626,7 @@ const GAME = {
     }
     // HPバー(立ち絵の頭上)
     if (e.hp < e.maxHp){
-      const dh = tp*1.7*scale;
+      const dh = tp*1.25*scale;
       const w = tp * .8, hx = (e.anim.fx+0.5)*tp - w/2, hy = (e.anim.fy+0.95)*tp - dh - 4;
       ctx.fillStyle = "rgba(10,12,14,.85)"; ctx.fillRect(hx-1, hy-1, w+2, 5);
       ctx.fillStyle = e.hp/e.maxHp > .5 ? "#7ed47e" : e.hp/e.maxHp > .25 ? "#f5a623" : "#ff5d4d";
@@ -1624,7 +1637,7 @@ const GAME = {
       ctx.fillStyle = "#ffd24a";
       ctx.font = `bold ${Math.round(tp*.28)}px monospace`;
       ctx.textAlign = "center";
-      ctx.fillText(def.name, (e.anim.fx+0.5)*tp, (e.anim.fy+0.95)*tp - tp*1.5*scale - 8);
+      ctx.fillText(def.name, (e.anim.fx+0.5)*tp, (e.anim.fy+0.95)*tp - tp*1.25*scale - 8);
       ctx.textAlign = "left";
     }
     // スタン表示

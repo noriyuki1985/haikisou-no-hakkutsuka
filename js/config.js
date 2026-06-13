@@ -3,12 +3,12 @@
 // ============================================================
 "use strict";
 const CONFIG = {
-  VERSION: "v18.0.0",
+  VERSION: "v19.1.0",
   TILE: 32,            // 論理タイルサイズ(px)
   SPRITE: 16,          // ドット絵の解像度
   MAX_FLOOR: 30,       // 最深部
   INV_MAX: 12,
-  STEP_MS: 110,        // 1歩のアニメ時間
+  STEP_MS: 125,        // 1歩のアニメ時間
   ATTACK_MS: 130,
   HUNGER_MAX: 100,
   HUNGER_TURNS: 8,     // 何ターンで満腹度1減るか

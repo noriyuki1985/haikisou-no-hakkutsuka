@@ -398,26 +398,99 @@ function tileSprite(kind, vx, vy){
       break;
     }
     case "grass": {
-      rect(ctx,0,0,S,S,"#39402b");
-      for (let i=0;i<6;i++){
+      rect(ctx,0,0,S,S,"#3c4430");
+      for (let i=0;i<7;i++){
         const x=Math.floor(h(variant,i,4)*15), y=Math.floor(h(i,variant,5)*15);
-        px(ctx,x,y, h(x,y,6)<.5 ? "#454e33" : "#2f3623");
+        px(ctx,x,y, h(x,y,6)<.5 ? "#49543a" : "#313927");
+        if (h(x,y,9)<.3) px(ctx,x,y-1>=0?y-1:0,"#566142"); // 草の立ち
       }
-      if (variant===2){ px(ctx,4,6,"#caa23a"); px(ctx,11,10,"#857f72"); } // 散らばる廃品
+      if (variant===2){ px(ctx,4,6,"#caa23a"); px(ctx,11,10,"#857f72"); }
       break;
     }
     case "path": {
-      rect(ctx,0,0,S,S,"#5a4e3a");
-      for (let i=0;i<5;i++){
+      rect(ctx,0,0,S,S,"#6a5b42");
+      rect(ctx,0,0,S,1,"#7a6a4e"); rect(ctx,0,S-1,S,1,"#564a36");
+      for (let i=0;i<6;i++){
         const x=Math.floor(h(variant,i,7)*15), y=Math.floor(h(i,variant,8)*15);
-        px(ctx,x,y,"#4a3f2e");
+        px(ctx,x,y, h(x,y,3)<.5 ? "#594c38" : "#766548");
       }
+      // 踏み固められた石
+      if (variant!==0){ px(ctx,3,11,"#857257"); px(ctx,11,4,"#857257"); }
       break;
     }
     case "vwall": {
-      rect(ctx,0,0,S,6,"#6a5a44");  rect(ctx,0,0,S,1,"#8a7858");
-      rect(ctx,0,6,S,10,"#4a3f30"); rect(ctx,0,6,S,1,"#2c251c");
-      rect(ctx,2,9,3,4,"#33291e"); rect(ctx,10,9,3,4,"#33291e");
+      // 家の前壁(木+トタン)
+      rect(ctx,0,0,S,S,"#4a3f30");
+      rect(ctx,0,0,S,6,"#6a5a44"); rect(ctx,0,0,S,1,"#8a7858");
+      rect(ctx,0,6,S,1,"#2c251c");
+      // 板の縦目地
+      for (let x=2;x<S;x+=4) rect(ctx,x,6,1,10,"#3a3024");
+      rect(ctx,2,9,3,4,"#2c241a");
+      break;
+    }
+    case "roof": {
+      // 家の屋根(トタン波板・斜め光)
+      rect(ctx,0,0,S,S,"#7a4a2c");
+      rect(ctx,0,0,S,1,"#9a6038");
+      for (let x=0;x<S;x+=3){ rect(ctx,x,0,1,S,"#6a3f26"); rect(ctx,x+1,0,1,S,"#86532f"); }
+      // 錆
+      if (variant!==2){ rect(ctx,Math.floor(h(variant,1,2)*10)+2,Math.floor(h(variant,2,3)*10)+2,3,2,"#5a3520"); }
+      break;
+    }
+    case "door": {
+      // 家の入口側(屋根の軒下+扉)
+      rect(ctx,0,0,S,S,"#4a3f30");
+      rect(ctx,0,0,S,3,"#7a4a2c"); rect(ctx,0,0,S,1,"#9a6038"); // 軒
+      rect(ctx,5,4,6,12,"#2c2018"); rect(ctx,5,4,6,1,"#5a4a36"); // 扉
+      rect(ctx,6,5,4,10,"#3a2c20");
+      px(ctx,9,10,"#caa23a"); // 取っ手
+      // 窓の灯り
+      if (variant===1){ rect(ctx,1,7,3,3,"#ffd24a"); }
+      break;
+    }
+    case "purifier": {
+      // 浄水機関(青く光る大型機械パーツ)
+      rect(ctx,0,0,S,S,"#2c353d");
+      rect(ctx,0,0,S,1,"#4a565f"); rect(ctx,0,0,1,S,"#3a444d");
+      rect(ctx,3,3,10,10,"#3a444d"); rect(ctx,3,3,10,1,"#5a646e");
+      // 配管
+      rect(ctx,1,6,2,5,"#4a3f30"); rect(ctx,13,5,2,6,"#4a3f30");
+      // コア窓(青)
+      const glow = "#3ddad7";
+      rect(ctx,6,6,4,4,glow); rect(ctx,7,7,2,2,"#8ae8ff");
+      // 計器ランプ
+      px(ctx,4,11, h(variant,0,1)<.5 ? "#7ed47e" : "#f5a623");
+      px(ctx,11,11,"#ff5d4d");
+      break;
+    }
+    case "well": {
+      // 涸れ井戸(石組み・空)
+      rect(ctx,0,0,S,S,"#3c4430");
+      rect(ctx,3,3,10,10,"#6a5f4e"); rect(ctx,3,3,10,1,"#8a7d66");
+      rect(ctx,5,5,6,6,"#1a1510"); // 空の井戸の底
+      rect(ctx,4,4,8,1,"#564a38");
+      px(ctx,6,7,"#2c2418"); px(ctx,9,9,"#2c2418");
+      break;
+    }
+    case "crate": {
+      // 木箱(物資)
+      rect(ctx,0,0,S,S,"#3c4430");
+      rect(ctx,2,4,12,11,"#7a5a36"); rect(ctx,2,4,12,1,"#9a7544");
+      rect(ctx,2,4,1,11,"#5a4026"); rect(ctx,13,4,1,11,"#5a4026");
+      rect(ctx,2,9,12,1,"#5a4026"); rect(ctx,7,4,1,11,"#5a4026");
+      px(ctx,4,6,"#caa23a"); // 留め金
+      break;
+    }
+    case "campfire": {
+      // 焚き火の土台(石囲い+薪)。炎は game.js 側で動的描画
+      rect(ctx,0,0,S,S,"#5a4e3a");
+      // 石の輪
+      for (const [sx,sy] of [[3,4],[7,3],[11,4],[12,8],[10,12],[6,12],[3,9]]) { rect(ctx,sx,sy,2,2,"#6a6055"); }
+      // 薪
+      rect(ctx,5,8,6,2,"#3a2c1e"); rect(ctx,6,7,5,2,"#4a3826");
+      rect(ctx,7,9,3,1,"#1a1410");
+      // 残り火
+      px(ctx,8,9,"#ff7a3a"); px(ctx,7,10,"#ffb36b");
       break;
     }
     case "water": {
@@ -435,7 +508,7 @@ function tileSprite(kind, vx, vy){
       break;
     }
     case "fence": {
-      rect(ctx,0,0,S,S,"#39402b");
+      rect(ctx,0,0,S,S,"#3c4430");
       rect(ctx,1,4,14,1,"#6a5a44"); rect(ctx,1,9,14,1,"#6a5a44");
       rect(ctx,3,2,2,12,"#4a3f30"); rect(ctx,11,2,2,12,"#4a3f30");
       break;

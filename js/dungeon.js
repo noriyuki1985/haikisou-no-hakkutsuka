@@ -177,25 +177,27 @@ function makeEnemy(id, x, y, floor){
 // ---------- 集落 ----------
 // , 草 / . 道 / # 家壁 / ~ 井戸(涸れ) / F 柵 / G 東門 / P 浄水機 / 空白=草
 const VILLAGE_LAYOUT = [
-"FFFFFFFFFFFFFFFFFFFFFF",
-"F,,,,,,,,,,,,,,,,,,,,F",
-"F,##,,,,,##,,,,,,,,,,F",
-"F,##,,,,,##,,,PP,,,,,F",
-"F,,.,,,,,.,,,,PP,,,,,F",
-"F,,.......,,,,.,,,,,,F",
-"F,,.,,,,,.....x......G",
-"F,,.,,,~,,.,,,,,,,,,,F",
-"F,####,,,,.,,,##,,,,,F",
-"F,####,,,,.,,,##,,,,,F",
-"F,,,,,,,,,.,,,.,,,,,,F",
-"F,,,,,,,,,.....,,,,,,F",
-"F,,,,,,,,,,,,,,,,,,,,F",
-"FFFFFFFFFFFFFFFFFFFFFF",
+"FFFFFFFFFFFFFFFFFFFFFFFF",
+"F,,,,,,,,,,,,,,,,,,,,,,F",
+"F,RRRR,,,,RRRR,,,,PPPP,F",
+"F,RRRR,,,,RRRR,,,,PPPP,F",
+"F,#DD#,,,,#DD#,,,,PPPP,F",
+"F,,..,,,,,,..,,,,,,..,,F",
+"F,,........,,,,,......,F",
+"F,c,,,,,,.,,**,,.,,,,c,F",
+"F,,,,~~,,.,,**,,.,,,,,,F",
+"F,,,,~~,,.,,,,,,.,,c,,,G",
+"F,RRRR,,,........,,,,,,F",
+"F,RRRR,,,.,,,,,,,RRRR,,F",
+"F,#DD#,,,.,,,,,,,#DD#,,F",
+"F,,..,,,,.,,,,,,,,..,,,F",
+"F,,,,,,,,.,,,,c,,,,,,,,F",
+"FFFFFFFFFFFFFFFFFFFFFFFF",
 ];
 function getVillage(){
   const H = VILLAGE_LAYOUT.length, W = VILLAGE_LAYOUT[0].length;
   const map = [], kind = [];
-  let start = [10, 7], gate = [W-1, 6];
+  let start = [9, 9], gate = [W-1, 9], campfire = [11, 7];
   for (let y = 0; y < H; y++){
     map.push(new Array(W).fill(T.FLOOR));
     kind.push(new Array(W).fill("grass"));
@@ -203,39 +205,46 @@ function getVillage(){
       const c = VILLAGE_LAYOUT[y][x];
       if (c === "F"){ map[y][x] = T.WALL; kind[y][x] = "fence"; }
       else if (c === "#"){ map[y][x] = T.WALL; kind[y][x] = "vwall"; }
-      else if (c === "P"){ map[y][x] = T.WALL; kind[y][x] = "gate"; } // 浄水機(外観は機械)
-      else if (c === "~"){ map[y][x] = T.WALL; kind[y][x] = "water"; }
+      else if (c === "R"){ map[y][x] = T.WALL; kind[y][x] = "roof"; }
+      else if (c === "D"){ map[y][x] = T.WALL; kind[y][x] = "door"; }
+      else if (c === "P"){ map[y][x] = T.WALL; kind[y][x] = "purifier"; }
+      else if (c === "~"){ map[y][x] = T.WALL; kind[y][x] = "well"; }
+      else if (c === "c"){ map[y][x] = T.WALL; kind[y][x] = "crate"; }
+      else if (c === "*"){ map[y][x] = T.WALL; kind[y][x] = "campfire"; }
       else if (c === "."){ kind[y][x] = "path"; }
       else if (c === "x"){ kind[y][x] = "path"; start = [x, y]; }
       else if (c === "G"){ map[y][x] = T.FLOOR; kind[y][x] = "gate"; gate = [x, y]; }
     }
   }
+  // 開始位置(門へ向かう道の途中)と焚き火位置(中央広場の*ブロック)
+  start = [9, 13];
+  campfire = [12, 7];
   const npcs = [
-    { id:"elder", name:"長老ガジュ", x:13, y:4, body:"elder",
+    { id:"elder", name:"長老ガジュ", x:18, y:5, body:"elder",
       lines:[
         "おお、発掘家か。見ての通り、浄水機関が止まりかけておる。",
         "原動機の「アクアコア」が寿命を迎えたのじゃ。\n替えは…廃棄層の最深部、地下30階にしかない。",
         "AIどもは今も命令のままに作り、捨て続けておる。\n奴らにとって我らは、ただの障害物じゃ。気をつけよ。",
         "頼んだぞ。この集落の水は、お前さんに懸かっておる。",
       ]},
-    { id:"mechanic", name:"機械工ルオ", x:5, y:5, body:"mechanic",
+    { id:"mechanic", name:"機械工ルオ", x:3, y:6, body:"mechanic",
       lines:[
         "浄水機関、だましだまし回してるけど…もって十日ってとこ。",
         "廃棄層の機械は「敵」じゃない。ただの作業機械。\nでも作業の邪魔をする者は排除する。それだけの話。",
         "錆びた粘体に殴られると武器が腐食する。気をつけて。\n鍛錬チップがあれば直せるけどね。",
         "「帰還タグ」は必ず一枚は残しておくこと。\n深層で持ってないと…まあ、帰れないから。",
       ]},
-    { id:"child", name:"少年ピノ", x:9, y:10, body:"child",
+    { id:"child", name:"少年ピノ", x:12, y:10, body:"child",
       lines:[
         "ねえねえ、廃棄層ってどんなとこ?\nぼくも大きくなったら発掘家になるんだ!",
         "おみずがないと、スープがつくれないんだって。\nはやくなんとかしてほしいなあ。",
       ]},
-    { id:"keeper", name:"記録係ミレ", x:15, y:9, body:"keeper",
+    { id:"keeper", name:"記録係ミレ", x:6, y:11, body:"keeper",
       lines:[
         "発掘記録はわたしが付けています。\nあなたの最深到達はタイトル画面にも残ります。",
         "倒れた発掘家の荷物は、戻ってきません。\nどうか、欲をかきすぎないで。",
         "倒れるとレベルも1からやり直しです。\nでも、装備して帰ってきたものは集落に残りますから。",
       ]},
   ];
-  return { W, H, map, kind, start, gate, npcs };
+  return { W, H, map, kind, start, gate, campfire, npcs };
 }
