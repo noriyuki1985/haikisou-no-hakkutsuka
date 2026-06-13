@@ -601,6 +601,73 @@ function floorImageFor(x, y){
   const k = ["tile.floor_a","tile.floor_b","tile.floor_c"][v];
   return ASSETS.get(k);
 }
+// 壁オートタイル: 4近傍(上下左右)が「歩ける床」かを見て、内壁/外壁/角/端を選び回転を返す
+//  返り値: { img, rot(ラジアン) } / 画像が無ければ null(呼び出し側でコード生成へ)
+function wallTile(d, x, y){
+  if (!ASSETS.ready) return null;
+  const isFloor = (xx, yy) => {
+    if (xx < 0 || yy < 0 || xx >= d.W || yy >= d.H) return false;
+    const t = d.map[yy][xx];
+    return t !== T.WALL; // 床/通路/階段/台座は「開いている」
+  };
+  const N = isFloor(x, y-1), S = isFloor(x, y+1), E = isFloor(x+1, y), W = isFloor(x-1, y);
+  const NE = isFloor(x+1,y-1), NW = isFloor(x-1,y-1), SE = isFloor(x+1,y+1), SW = isFloor(x-1,y+1);
+  const openCount = (N?1:0)+(S?1:0)+(E?1:0)+(W?1:0);
+  const HALF = Math.PI/2;
+
+  // 端(行き止まりの壁: 3辺が床)→ wall_end(上が開いた向きを基準と仮定し回転)
+  if (openCount >= 3){
+    const img = ASSETS.get("tile.wall_end");
+    if (img){
+      // 唯一「閉じている」方向に背を向ける。基準: capの開口が上(N)
+      let rot = 0;
+      if (!N) rot = 0; else if (!S) rot = Math.PI; else if (!W) rot = -HALF; else rot = HALF;
+      return { img, rot };
+    }
+  }
+  // 外角(隣接2辺が床で、しかも隣り合う=角)→ wall_outer_corner
+  // 例: N かつ E が床 → 北東が外に開いた角
+  if (openCount === 2){
+    const adjacent = (N&&E)||(E&&S)||(S&&W)||(W&&N);
+    if (adjacent){
+      const img = ASSETS.get("tile.wall_outer");
+      if (img){
+        // 基準: N&W が開く向きを rot=0 と仮定し、時計回りに合わせる
+        let rot = 0;
+        if (N && W) rot = 0;
+        else if (N && E) rot = HALF;
+        else if (S && E) rot = Math.PI;
+        else if (S && W) rot = -HALF;
+        return { img, rot };
+      }
+    }
+    // 対向2辺(N&S または E&W)が床 = 通路状の壁 → 平壁(回転で縦横)
+    const img = ASSETS.get(Math.floor(tileHash(x,y,13)*2) ? "tile.wall_a" : "tile.wall_b");
+    if (img) return { img, rot: (E&&W) ? 0 : 0 };
+  }
+  // 内角(1辺だけ床、かつ斜めに床が無い側)→ wall_inner_corner
+  if (openCount === 1){
+    const img = ASSETS.get("tile.wall_inner");
+    if (img){
+      let rot = 0;
+      if (N) rot = 0; else if (E) rot = HALF; else if (S) rot = Math.PI; else rot = -HALF;
+      return { img, rot };
+    }
+  }
+  // 周囲が壁ばかり(openCount 0)で、斜めにだけ床がある → 内角で角を埋める
+  if (openCount === 0 && (NE||NW||SE||SW)){
+    const img = ASSETS.get("tile.wall_inner");
+    if (img){
+      let rot = 0;
+      if (SE) rot = 0; else if (SW) rot = HALF; else if (NW) rot = Math.PI; else rot = -HALF;
+      return { img, rot };
+    }
+  }
+  // それ以外は平壁
+  const img = ASSETS.get(Math.floor(tileHash(x,y,13)*2) ? "tile.wall_a" : "tile.wall_b");
+  return img ? { img, rot: 0 } : null;
+}
+// 後方互換(未使用化)
 function wallImageFor(x, y){
   if (!ASSETS.ready) return null;
   const v = Math.floor(tileHash(x, y, 13) * 2);

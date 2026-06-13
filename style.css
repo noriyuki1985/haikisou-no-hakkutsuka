@@ -4,18 +4,18 @@
    暗い油膜色の地に、燐光アンバーの計器表示。
    ============================================================ */
 :root{
-  --bg:#0e1114;
-  --panel:#171c21;
-  --panel2:#1f262d;
-  --line:#2c353d;
-  --amber:#f5a623;
-  --amber-soft:#ffcf7d;
-  --amber-dim:#8a6a33;
-  --teal:#3ddad7;
-  --danger:#ff5d4d;
-  --green:#7ed47e;
-  --text:#d8d2c4;
-  --text-dim:#857f72;
+  --bg:#12161b;
+  --panel:#1e252c;
+  --panel2:#2a333c;
+  --line:#3a4651;
+  --amber:#ffb53d;
+  --amber-soft:#ffd98a;
+  --amber-dim:#b8893f;
+  --teal:#4fe8e4;
+  --danger:#ff6d5d;
+  --green:#9be89b;
+  --text:#ece6d8;
+  --text-dim:#a39c8c;
   --mono:ui-monospace,"Cascadia Mono","Courier New",monospace;
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -70,12 +70,13 @@ button{font-family:var(--mono);cursor:pointer}
 #game-screen{background:var(--bg)}
 #hud{display:flex;align-items:center;gap:8px;padding:6px 8px;
   padding-top:calc(6px + env(safe-area-inset-top));
-  background:linear-gradient(#1c2228,#14181c);border-bottom:1px solid var(--line);
+  background:linear-gradient(#2a333c,#1e252c);border-bottom:1px solid var(--line);
   font-size:12px;flex:0 0 auto;min-height:40px}
 .hud-cell{display:flex;align-items:center;gap:5px;white-space:nowrap}
-.hud-floor{color:var(--amber-soft);font-weight:700;font-size:14px;letter-spacing:.1em;min-width:52px}
+.hud-floor{color:var(--amber-soft);font-weight:700;font-size:14px;letter-spacing:.1em;min-width:52px;
+  text-shadow:0 0 8px rgba(255,181,61,.3)}
 .hud-label{color:var(--text-dim);font-size:10px}
-.hud-num{color:var(--text);font-size:12px}
+.hud-num{color:var(--text);font-size:12px;font-weight:600}
 .bar{width:64px;height:9px;background:#0a0c0e;border:1px solid var(--line);border-radius:2px;overflow:hidden}
 .hud-hp .bar{width:84px}
 .bar-fill{height:100%;transition:width .25s}
@@ -89,12 +90,12 @@ button{font-family:var(--mono);cursor:pointer}
 .hud-btn.off{color:var(--text-dim);text-decoration:line-through}
 
 /* ---------- キャンバス ---------- */
-#canvas-wrap{flex:1 1 auto;position:relative;overflow:hidden;background:#08090b}
+#canvas-wrap{flex:1 1 auto;position:relative;overflow:hidden;background:#10141a}
 #game-canvas{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated}
-/* 走査線(回収端末の画面越しに見ている演出) */
+/* 走査線(ごく薄く。明るさを損なわない程度) */
 #canvas-wrap::after{content:"";position:absolute;inset:0;pointer-events:none;
-  background:repeating-linear-gradient(0deg,rgba(0,0,0,.10) 0 1px,transparent 1px 3px);
-  mix-blend-mode:overlay;opacity:.5}
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.05) 0 1px,transparent 1px 3px);
+  mix-blend-mode:overlay;opacity:.3}
 #minimap{position:absolute;top:8px;right:8px;background:rgba(10,12,14,.72);
   border:1px solid var(--amber-dim);border-radius:3px;image-rendering:pixelated;z-index:5}
 #floor-banner{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
@@ -114,12 +115,13 @@ button{font-family:var(--mono);cursor:pointer}
 
 /* ---------- アクションバー ---------- */
 #action-bar{display:flex;gap:6px;padding:8px;padding-bottom:calc(8px + env(safe-area-inset-bottom));
-  background:linear-gradient(#14181c,#1c2228);border-top:1px solid var(--line);flex:0 0 auto}
-.act-btn{flex:1;padding:11px 4px;background:var(--panel2);border:1px solid var(--line);
-  color:var(--text);font-size:14px;border-radius:4px;position:relative;letter-spacing:.1em}
-.act-btn:active{background:var(--amber-dim);color:#000}
+  background:linear-gradient(#1e252c,#2a333c);border-top:1px solid var(--line);flex:0 0 auto}
+.act-btn{flex:1;padding:11px 4px;background:linear-gradient(#323d47,#28313a);
+  border:1px solid #46535e;color:var(--text);font-size:14px;border-radius:4px;position:relative;
+  letter-spacing:.1em;font-weight:600;box-shadow:0 1px 0 rgba(255,255,255,.05) inset}
+.act-btn:active{background:var(--amber);color:#1a1208;border-color:var(--amber-soft)}
 .act-sub{display:block;font-size:9px;color:var(--text-dim);margin-top:2px;letter-spacing:0}
-.act-btn:active .act-sub{color:#222}
+.act-btn:active .act-sub{color:#3a2a10}
 
 /* ---------- モーダル共通 ---------- */
 .modal{position:absolute;inset:0;background:rgba(0,0,0,.65);z-index:40;

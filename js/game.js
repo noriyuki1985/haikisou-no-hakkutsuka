@@ -377,7 +377,7 @@ const GAME = {
       if (inRoom !== (aheadRoom >= 0)) return;           // 部屋⇔通路の境界
       if (!inRoom && this._openNeighbors(p.x,p.y) >= 3) return; // 分岐
       if (this._anyEnemyVisible()) return;
-      setTimeout(run, CONFIG.STEP_MS * 1.0);
+      setTimeout(run, CONFIG.STEP_MS * 1.25);
     };
     run();
   },
@@ -1501,20 +1501,37 @@ const GAME = {
         const t = d.map[y][x];
         const inSight = vis[y][x];
         ctx.globalAlpha = inSight ? 1 : .4;
+        if (t === T.WALL){
+          const wt = wallTile(d, x, y);
+          if (wt && wt.img){
+            if (wt.rot){
+              const cx = x*tp + tp/2, cy = y*tp + tp/2;
+              ctx.save();
+              ctx.translate(cx, cy);
+              ctx.rotate(wt.rot);
+              ctx.drawImage(wt.img, -tp/2, -tp/2, tp, tp);
+              ctx.restore();
+            } else {
+              ctx.drawImage(wt.img, x*tp, y*tp, tp, tp);
+            }
+          } else {
+            ctx.drawImage(tileSprite("dwall", x, y), x*tp, y*tp, tp, tp);
+          }
+          ctx.globalAlpha = 1;
+          continue;
+        }
         let img = null;
-        if (t === T.WALL) img = wallImageFor(x,y);
-        else if (t === T.STAIRS) img = stairsImage(!!d.liftUp);
+        if (t === T.STAIRS) img = stairsImage(!!d.liftUp);
         else if (t === T.PEDESTAL) img = pedestalImage();
         else img = floorImageFor(x,y);
         if (img){
           ctx.drawImage(img, x*tp, y*tp, tp, tp);
-          // 床に装飾を重ねる(歩ける床のみ)
           if (t === T.FLOOR || t === T.CORRIDOR){
             const dc = decorFor(x,y);
             if (dc) ctx.drawImage(dc, x*tp + tp*0.1, y*tp + tp*0.1, tp*0.8, tp*0.8);
           }
         } else {
-          const kind = t === T.WALL ? "dwall" : t === T.STAIRS ? "stairs" : t === T.PEDESTAL ? "pedestal" : "dfloor";
+          const kind = t === T.STAIRS ? "stairs" : t === T.PEDESTAL ? "pedestal" : "dfloor";
           ctx.drawImage(tileSprite(kind, x, y), x*tp, y*tp, tp, tp);
         }
         ctx.globalAlpha = 1;
@@ -1536,36 +1553,95 @@ const GAME = {
       ctx.fillRect(cx-1, cy-tp*.08, 2, tp*.12);
       ctx.globalAlpha = 1;
     }
-    // 台座のコア(きらめき)
+    // 台座のコア(強く発光: 最重要インタラクト)
     if (d.pedestal){
       const [px2, py2] = d.pedestal;
       if (d.explored[py2][px2]){
-        const pulse = .6 + .4 * Math.sin(now/250);
-        ctx.globalAlpha = pulse;
-        ctx.drawImage(itemSprite("aquaCore"), px2*tp + tp*.25, py2*tp - tp*.3, tp*.5, tp*.5);
+        const cx = (px2+0.5)*tp, cy = (py2+0.5)*tp;
+        // 床からのにじみ光
+        const pulse = .55 + .45 * Math.sin(now/220);
+        const grad = ctx.createRadialGradient(cx, cy, tp*0.1, cx, cy, tp*1.6);
+        grad.addColorStop(0, `rgba(61,218,215,${0.32*pulse})`);
+        grad.addColorStop(1, "rgba(61,218,215,0)");
+        ctx.fillStyle = grad;
+        ctx.fillRect(cx - tp*1.6, cy - tp*1.6, tp*3.2, tp*3.2);
+        ctx.globalAlpha = 0.7 + 0.3*Math.sin(now/200);
+        ctx.drawImage(itemSprite("aquaCore"), px2*tp + tp*.25, py2*tp - tp*.32 - Math.sin(now/300)*2, tp*.5, tp*.5);
         ctx.globalAlpha = 1;
       }
     }
-    // 床の道具(種別画像 or コード生成)
+    // 床の道具(発光リングで「拾える物」と明示)
     for (const gi of d.groundItems){
       if (!d.explored[gi.y][gi.x]) continue;
-      ctx.globalAlpha = vis[gi.y][gi.x] ? 1 : .4;
-      const img = itemImage(gi.item.id);
-      const bob = Math.sin(now/400 + gi.x*2 + gi.y) * 2;
-      if (img){
-        ctx.drawImage(img, gi.x*tp + tp*.18, gi.y*tp + tp*.12 - bob, tp*.64, tp*.64);
-      } else {
-        ctx.drawImage(itemSprite(gi.item.id), gi.x*tp + tp*.18, gi.y*tp + tp*.18 - bob, tp*.64, tp*.64);
+      const seen = vis[gi.y][gi.x];
+      ctx.globalAlpha = seen ? 1 : .4;
+      const cx = (gi.x+0.5)*tp, cy = (gi.y+0.5)*tp;
+      const bob = Math.sin(now/360 + gi.x*2 + gi.y) * tp*0.05;
+      // アイテムの種別色で淡い発光(視界内のみ)
+      if (seen){
+        const cat = ITEMS[gi.item.id] ? ITEMS[gi.item.id].cat : "device";
+        const glowCol = ({food:"255,200,90", med:"120,220,160", chip:"61,218,215",
+                          rod:"255,160,80", throw:"255,120,90", weapon:"255,180,90",
+                          armor:"140,200,255", quest:"61,218,215"})[cat] || "255,210,120";
+        const gp = .45 + .35*Math.sin(now/260 + gi.x);
+        const grad = ctx.createRadialGradient(cx, cy, tp*0.05, cx, cy, tp*0.7);
+        grad.addColorStop(0, `rgba(${glowCol},${0.5*gp})`);
+        grad.addColorStop(1, `rgba(${glowCol},0)`);
+        ctx.fillStyle = grad;
+        ctx.fillRect(cx - tp*0.7, cy - tp*0.7, tp*1.4, tp*1.4);
+        // 足元の小さな光リング
+        ctx.strokeStyle = `rgba(${glowCol},${0.6*gp})`;
+        ctx.lineWidth = Math.max(1, tp*0.04);
+        ctx.beginPath();
+        ctx.ellipse(cx, (gi.y+0.82)*tp, tp*0.28, tp*0.1, 0, 0, Math.PI*2);
+        ctx.stroke();
       }
-      // 拾えるきらめき
-      if (vis[gi.y][gi.x]){
-        const tw = (now/110 + gi.x*3 + gi.y*7) % 9;
-        if (tw < 0.6){
+      const img = itemImage(gi.item.id);
+      if (img){
+        ctx.drawImage(img, gi.x*tp + tp*.18, gi.y*tp + tp*.1 - bob, tp*.64, tp*.64);
+      } else {
+        ctx.drawImage(itemSprite(gi.item.id), gi.x*tp + tp*.18, gi.y*tp + tp*.16 - bob, tp*.64, tp*.64);
+      }
+      // 上昇するきらめき粒
+      if (seen){
+        const tw = (now/90 + gi.x*3 + gi.y*7) % 7;
+        if (tw < 1.4){
+          ctx.globalAlpha = (1.4 - tw) * 0.8;
           ctx.fillStyle = "#fff6d8";
-          ctx.fillRect(gi.x*tp + tp*.72, gi.y*tp + tp*.12, 2, 2);
+          ctx.fillRect(cx + Math.sin(now/200+gi.x)*tp*0.2, (gi.y+0.3)*tp - tw*tp*0.12, 2, 2);
+          ctx.globalAlpha = seen ? 1 : .4;
         }
       }
       ctx.globalAlpha = 1;
+    }
+    // 階段・リフト(インタラクト可能: 明るい輪郭パルス)
+    this._highlightInteractive(ctx, d, tp, now, vis);
+  },
+
+  // インタラクト可能タイル(階段/リフト)に強調パルスを描く
+  _highlightInteractive(ctx, d, tp, now, vis){
+    for (let y = 0; y < d.H; y++){
+      const row = d.map[y];
+      for (let x = 0; x < d.W; x++){
+        if (row[x] !== T.STAIRS) continue;
+        if (!d.explored[y][x] || !vis[y][x]) continue;
+        const cx = (x+0.5)*tp, cy = (y+0.5)*tp;
+        const col = d.liftUp ? "255,210,74" : "245,166,35";
+        const gp = .5 + .5*Math.sin(now/300);
+        const grad = ctx.createRadialGradient(cx, cy, tp*0.1, cx, cy, tp*1.3);
+        grad.addColorStop(0, `rgba(${col},${0.28*gp})`);
+        grad.addColorStop(1, `rgba(${col},0)`);
+        ctx.fillStyle = grad;
+        ctx.fillRect(cx - tp*1.3, cy - tp*1.3, tp*2.6, tp*2.6);
+        // 矢印(降りる=▼ / 帰還=▲)
+        ctx.globalAlpha = gp;
+        ctx.fillStyle = `rgb(${col})`;
+        ctx.font = `bold ${Math.round(tp*0.42)}px monospace`;
+        ctx.textAlign = "center";
+        ctx.fillText(d.liftUp ? "\u25b2" : "\u25bc", cx, cy - tp*0.5 - Math.sin(now/250)*2);
+        ctx.textAlign = "left";
+        ctx.globalAlpha = 1;
+      }
     }
   },
 
