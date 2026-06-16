@@ -377,7 +377,7 @@ const GAME = {
       if (inRoom !== (aheadRoom >= 0)) return;           // 部屋⇔通路の境界
       if (!inRoom && this._openNeighbors(p.x,p.y) >= 3) return; // 分岐
       if (this._anyEnemyVisible()) return;
-      setTimeout(run, CONFIG.STEP_MS * 1.25);
+      setTimeout(run, 70);
     };
     run();
   },
@@ -417,6 +417,13 @@ const GAME = {
   _afterPlayerMove(){
     const st = this.st, p = st.player, d = st.dungeon;
     this._computeVisibility();
+    // ロボットステーション起動判定(部屋に入った瞬間)
+    if (d.station && !d.station.triggered){
+      const rid = d.roomId[p.y][p.x];
+      if (rid >= 0 && rid === d.station.roomId){
+        this._triggerStation();
+      }
+    }
     const gi = d.groundItems.find(g => g.x === p.x && g.y === p.y);
     if (gi) this._pickup(gi);
     const trap = d.traps.find(t => t.x === p.x && t.y === p.y);
@@ -427,6 +434,19 @@ const GAME = {
     if (d.map[p.y] && d.map[p.y][p.x] === T.STAIRS){
       UI.log(d.liftUp ? "帰還リフトだ。(自分をタップで帰還)" : "降下リフトだ。(自分をタップで降りる)", "sys");
     }
+  },
+
+  _triggerStation(){
+    const st = this.st, d = st.dungeon;
+    d.station.triggered = true;
+    let n = 0;
+    for (const e of d.enemies){
+      if (e.station){ e.awake = true; n++; }
+    }
+    AUDIO.sfx("alarm");
+    this._stationFlash = performance.now();
+    UI.banner("警 報", "ROBOT STATION — 機械が一斉起動", 1700);
+    UI.log(`ロボットステーション! ${n}体の機械が一斉に動き出した!`, "warn");
   },
 
   _pickup(gi){
@@ -567,7 +587,7 @@ const GAME = {
       this._endPlayerTurn(CONFIG.ATTACK_MS);
       return;
     }
-    const dmg = this._calcDamage(this._playerAtk(), enemy.def);
+    const dmg = this._calcDamage(this._playerAtk(), this._enemyDef(enemy));
     setTimeout(() => AUDIO.sfx("hit"), 60);
     enemy.hp -= dmg;
     enemy.awake = true;
@@ -609,6 +629,13 @@ const GAME = {
     AUDIO.sfx("kill");
     UI.log(`${ENEMIES[enemy.id].name}を破壊した!`, "good");
     if (byPlayer && enemy.exp > 0) this._gainExp(enemy.exp);
+    if (enemy.carryItem){
+      const canDrop = !d.groundItems.some(g => g.x===enemy.x && g.y===enemy.y) && d.map[enemy.y][enemy.x] !== T.STAIRS && d.map[enemy.y][enemy.x] !== T.PEDESTAL;
+      if (canDrop){
+        d.groundItems.push({ x:enemy.x, y:enemy.y, item:enemy.carryItem });
+        UI.log(`${ENEMIES[enemy.id].name}が回収していた${itemName(enemy.carryItem)}を落とした。`, "item");
+      }
+    }
     if (ENEMIES[enemy.id].ai === "boss"){
       UI.banner("番人 撃破", "WARDEN DOWN", 1500);
     }
@@ -680,16 +707,18 @@ const GAME = {
   // 敵AI
   // ---------------------------------------------------------
   _enemiesAct(){
-    const st = this.st, d = st.dungeon, p = st.player;
+    const st = this.st, d = st.dungeon;
     for (const e of d.enemies.slice()){
       if (this.over) return;
       if (e.hp <= 0) continue;
       const def = ENEMIES[e.id];
       if (e.stun > 0){ e.stun--; continue; }
-      // 鈍足: 1ターンおき / 倍速: 2回行動
+      if (e.shieldTurns > 0) e.shieldTurns--;
+      if (e.buffTurns > 0) e.buffTurns--;
+      // 鈍足: 1ターンおき / 倍速: speed回行動
       let acts = 1;
       if (def.ai === "slow"){ e.actGauge ^= 1; if (!e.actGauge) continue; }
-      if (def.ai === "fast") acts = def.speed || 2;
+      if (def.speed) acts = def.speed;
       for (let a = 0; a < acts; a++){
         if (this.over || e.hp <= 0) break;
         this._enemyActOnce(e, def);
@@ -704,14 +733,43 @@ const GAME = {
     const sees = sameRoom || dist <= 5 || e.awake;
     if (sees) e.awake = true;
 
-    // 自爆セル
+    // 回収ドローン: アイテムを拾って逃げる。倒すと拾った物を落とす。
+    if (def.ai === "collector"){
+      if (e.carryItem){
+        if (dist <= 6){ this._enemyFlee(e); return; }
+        this._enemyWander(e); return;
+      }
+      const picked = this._collectorTryPick(e, def);
+      if (picked) return;
+      const target = this._collectorFindTarget(e);
+      if (target){ this._enemyMoveToward(e, target.x, target.y); return; }
+      if (dist <= 2){ this._enemyFlee(e); return; }
+      if (sees) this._enemyChase(e);
+      else this._enemyWander(e);
+      return;
+    }
+
+    // 吸引機: 直線上の主人公を引き寄せる。
+    if (def.ai === "suction"){
+      if (sees && this._trySuction(e, def)) return;
+      if (dist <= 1 && this._canMeleeFrom(e.x, e.y)){ this._enemyMelee(e, def); return; }
+      if (sees) this._enemyChase(e);
+      else this._enemyWander(e);
+      return;
+    }
+
+    // 自爆セル: 2カウントで爆発。敵も巻き込む。
     if (def.ai === "kamikaze"){
       if (e.primed){
-        this._explodeEnemy(e, def);
+        e.boomTimer = Math.max(0, (e.boomTimer ?? 2) - 1);
+        if (e.boomTimer <= 0){ this._explodeEnemy(e, def); return; }
+        this._addPop(e.x, e.y, e.boomTimer, "#ff5d4d");
+        if (st.visible[e.y][e.x]) UI.log(`${def.name}の自爆カウント ${e.boomTimer}`, "warn");
         return;
       }
       if (dist <= 1){
         e.primed = true;
+        e.boomTimer = 2;
         UI.log(`${def.name}が赤く明滅している…!`, "warn");
         AUDIO.sfx("trap");
         return;
@@ -721,12 +779,13 @@ const GAME = {
       return;
     }
 
-    // 修復ビット
+    // 修復ビット: HP割合が最も低い味方を優先修復。
     if (def.ai === "healer"){
-      const ally = d.enemies.find(o => o !== e && o.hp < o.maxHp && dist8(o.x,o.y,e.x,e.y) <= 3);
+      const ally = this._findRepairTarget(e, 3);
       if (ally){
-        ally.hp = Math.min(ally.maxHp, ally.hp + def.healAmt);
-        this._addPop(ally.x, ally.y, `+${def.healAmt}`, "#9fe08a");
+        const amt = def.healAmt || 8;
+        ally.hp = Math.min(ally.maxHp, ally.hp + amt);
+        this._addPop(ally.x, ally.y, `+${amt}`, "#9fe08a");
         if (st.visible[e.y][e.x]) UI.log(`${def.name}が${ENEMIES[ally.id].name}を修復した。`);
         return;
       }
@@ -736,7 +795,83 @@ const GAME = {
       return;
     }
 
-    // 幻影: 4ターンごとにプレイヤー近くへ転移
+    // 補給ポッド: 周囲の敵を強化。
+    if (def.ai === "buffer"){
+      const ally = this._findBuffTarget(e, 3);
+      if (ally){
+        ally.buffTurns = def.buffTurns || 8;
+        ally.buffAmt = def.buffAmt || 4;
+        this._addPop(ally.x, ally.y, "強化", "#ffd24a");
+        if (st.visible[e.y][e.x]) UI.log(`${def.name}が${ENEMIES[ally.id].name}を補給強化した。`, "warn");
+        return;
+      }
+      if (dist <= 2){ this._enemyFlee(e); return; }
+      if (sees) this._enemyChase(e);
+      else this._enemyWander(e);
+      return;
+    }
+
+    // 展開シールド: 周囲の敵に一時シールド。
+    if (def.ai === "shielder"){
+      const ally = this._findShieldTarget(e, 3);
+      if (ally){
+        ally.shieldTurns = def.shieldTurns || 6;
+        this._addPop(ally.x, ally.y, "盾", "#8fd0ff");
+        if (st.visible[e.y][e.x]) UI.log(`${def.name}が${ENEMIES[ally.id].name}にシールドを展開した。`, "warn");
+        return;
+      }
+      if (dist <= 2){ this._enemyFlee(e); return; }
+      if (sees) this._enemyChase(e);
+      else this._enemyWander(e);
+      return;
+    }
+
+    // 警報ビーコン: 見つかると警報カウント後に増援を呼ぶ。
+    if (def.ai === "beacon"){
+      if (sees){
+        e.alarmCharge = (e.alarmCharge || 0) + 1;
+        if (e.alarmCharge >= (def.summonDelay || 3)){
+          e.alarmCharge = 0;
+          const n = this._summonEnemiesNear(e.x, e.y, 2);
+          if (n > 0){
+            AUDIO.sfx("alarm");
+            UI.log(`${def.name}が警報を発した! 増援${n}体が起動。`, "warn");
+            return;
+          }
+        } else if (st.visible[e.y][e.x]){
+          this._addPop(e.x, e.y, "警報", "#ff5d4d");
+        }
+      }
+      if (dist <= 2){ this._enemyFlee(e); return; }
+      if (sees) this._enemyChase(e);
+      else this._enemyWander(e);
+      return;
+    }
+
+    // 投棄機: 廃材を投げる。着弾付近に鉄くずを残す。
+    if (def.ai === "dumper" && sees){
+      const line = this._lineToPlayer(e, def.range || 5);
+      if (line){
+        this._addProj(e.x, e.y, p.x, p.y, "#caa25a", itemSprite("scrap"));
+        AUDIO.sfx("throw");
+        const dmg = this._calcDamage(this._enemyAtk(e, def), this._playerDef());
+        UI.log(`${def.name}が廃材を投げた! ${dmg}のダメージ!`, "dmg");
+        this._damagePlayer(dmg, def.name);
+        this._dropScrapNear(p.x, p.y);
+        return;
+      }
+    }
+
+    // 掘削機: 直線上なら壁を壊しながら突進。
+    if (def.ai === "drill"){
+      if (sees && this._tryDrillMove(e, def)) return;
+      if (dist <= 1 && this._canMeleeFrom(e.x, e.y)){ this._enemyMelee(e, def); return; }
+      if (sees) this._enemyChase(e);
+      else this._enemyWander(e);
+      return;
+    }
+
+    // 光学迷彩機: 4ターンごとにプレイヤー近くへ転移
     if (def.ai === "phantom"){
       e.actGauge = (e.actGauge + 1) % 4;
       if (e.actGauge === 0 && sees && dist > 1){
@@ -755,13 +890,13 @@ const GAME = {
       }
     }
 
-    // 遠距離(警備ドローン / ガーディアン / 番人)
+    // 遠距離(警備ドローン / 狙撃砲台 / 中枢防衛機 / 番人)
     if ((def.ai === "ranged" || def.ai === "boss") && sees){
       const line = this._lineToPlayer(e, def.range || 6);
       if (line){
         this._addProj(e.x, e.y, p.x, p.y, "#8ad0ff");
         AUDIO.sfx("zap");
-        const dmg = this._calcDamage(e.atk, this._playerDef());
+        const dmg = this._calcDamage(this._enemyAtk(e, def), this._playerDef());
         if (st.visible[e.y][e.x]) UI.log(`${def.name}の光弾! ${dmg}のダメージ!`, "dmg");
         this._damagePlayer(dmg, def.name);
         return;
@@ -775,6 +910,165 @@ const GAME = {
     }
     if (sees) this._enemyChase(e);
     else this._enemyWander(e);
+  },
+
+  _enemyAtk(e, def){
+    return e.atk + ((e.buffTurns > 0) ? (e.buffAmt || 4) : 0);
+  },
+
+  _enemyDef(e){
+    return e.def + ((e.shieldTurns > 0) ? 6 : 0) + ((e.buffTurns > 0) ? Math.ceil((e.buffAmt || 4) / 2) : 0);
+  },
+
+  _collectorTryPick(e, def){
+    const d = this.st.dungeon;
+    const gi = d.groundItems.find(g => dist8(g.x,g.y,e.x,e.y) <= 1);
+    if (!gi) return false;
+    e.carryItem = gi.item;
+    d.groundItems.splice(d.groundItems.indexOf(gi), 1);
+    this._addPop(e.x, e.y, "回収", "#ffd24a");
+    if (this.st.visible[e.y][e.x]) UI.log(`${def.name}が${itemName(gi.item)}を回収した!`, "warn");
+    AUDIO.sfx("pickup");
+    return true;
+  },
+
+  _collectorFindTarget(e){
+    const d = this.st.dungeon;
+    let best = null;
+    for (const gi of d.groundItems){
+      const dd = dist8(gi.x, gi.y, e.x, e.y);
+      if (dd > 8) continue;
+      if (!best || dd < best.d) best = { x:gi.x, y:gi.y, d:dd };
+    }
+    return best;
+  },
+
+  _enemyMoveToward(e, tx, ty){
+    const cands = [];
+    for (const k in DIRS){
+      const [dx,dy] = DIRS[k];
+      const x = e.x+dx, y = e.y+dy;
+      if (!this._enemyWalkable(e, x, y, dx, dy)) continue;
+      cands.push([dist8(x,y,tx,ty), x, y]);
+    }
+    if (!cands.length) return false;
+    cands.sort((a,b)=>a[0]-b[0]);
+    e.x = cands[0][1]; e.y = cands[0][2];
+    return true;
+  },
+
+  _trySuction(e, def){
+    const st = this.st, p = st.player;
+    const dx = Math.sign(e.x - p.x), dy = Math.sign(e.y - p.y);
+    const adx = Math.abs(e.x - p.x), ady = Math.abs(e.y - p.y);
+    if (!(e.x === p.x || e.y === p.y || adx === ady)) return false;
+    if (Math.max(adx, ady) < 2 || Math.max(adx, ady) > (def.range || 4)) return false;
+    if (!this._clearLine(p.x, p.y, e.x, e.y)) return false;
+    const nx = p.x + dx, ny = p.y + dy;
+    if (!this._walkable(nx, ny)) return false;
+    if (st.dungeon.enemies.some(o => o.x === nx && o.y === ny)) return false;
+    p.x = nx; p.y = ny; p.anim.fx = nx; p.anim.fy = ny;
+    this._addProj(e.x, e.y, p.x, p.y, "#8fd0ff");
+    this._addPop(p.x, p.y, "吸引", "#8fd0ff");
+    UI.log(`${def.name}が吸引した!`, "warn");
+    AUDIO.sfx("zap");
+    this._afterPlayerMove();
+    return true;
+  },
+
+  _clearLine(x1, y1, x2, y2){
+    const d = this.st.dungeon;
+    const dx = Math.sign(x2 - x1), dy = Math.sign(y2 - y1);
+    let x = x1 + dx, y = y1 + dy;
+    while (!(x === x2 && y === y2)){
+      if (d.map[y][x] === T.WALL) return false;
+      x += dx; y += dy;
+    }
+    return true;
+  },
+
+  _findRepairTarget(e, range){
+    return this.st.dungeon.enemies
+      .filter(o => o !== e && o.hp < o.maxHp && dist8(o.x,o.y,e.x,e.y) <= range)
+      .sort((a,b)=>(a.hp/a.maxHp)-(b.hp/b.maxHp))[0] || null;
+  },
+
+  _findBuffTarget(e, range){
+    return this.st.dungeon.enemies
+      .filter(o => o !== e && !(o.buffTurns > 0) && dist8(o.x,o.y,e.x,e.y) <= range)
+      .sort((a,b)=>dist8(a.x,a.y,e.x,e.y)-dist8(b.x,b.y,e.x,e.y))[0] || null;
+  },
+
+  _findShieldTarget(e, range){
+    return this.st.dungeon.enemies
+      .filter(o => o !== e && !(o.shieldTurns > 0) && dist8(o.x,o.y,e.x,e.y) <= range)
+      .sort((a,b)=>dist8(a.x,a.y,e.x,e.y)-dist8(b.x,b.y,e.x,e.y))[0] || null;
+  },
+
+  _summonEnemiesNear(x, y, n){
+    const st = this.st, d = st.dungeon;
+    const table = enemyTableFor(st.floor).filter(([id]) => id !== "alarmBeacon" && id !== "warden");
+    let made = 0;
+    const cells = [];
+    for (let yy = y - 3; yy <= y + 3; yy++) for (let xx = x - 3; xx <= x + 3; xx++){
+      if (!this._walkable(xx, yy)) continue;
+      if (xx === st.player.x && yy === st.player.y) continue;
+      if (d.enemies.some(o => o.x === xx && o.y === yy)) continue;
+      if (dist8(xx,yy,x,y) < 2) continue;
+      cells.push([xx,yy]);
+    }
+    RNG.shuffle(cells);
+    for (const [xx,yy] of cells){
+      if (made >= n) break;
+      const id = weightedPick(table.length ? table : [["cleaner",10]]);
+      const ne = makeEnemy(id, xx, yy, st.floor);
+      ne.awake = true;
+      d.enemies.push(ne);
+      this._addBurst(xx, yy, ENEMIES[id].hue);
+      made++;
+    }
+    return made;
+  },
+
+  _dropScrapNear(x, y){
+    const d = this.st.dungeon;
+    if (!RNG.chance(.45)) return false;
+    const cells = [];
+    for (const k in DIRS){
+      const [dx,dy] = DIRS[k];
+      const xx = x+dx, yy = y+dy;
+      if (!this._walkable(xx, yy)) continue;
+      if (d.enemies.some(o => o.x === xx && o.y === yy)) continue;
+      if (d.groundItems.some(g => g.x === xx && g.y === yy)) continue;
+      cells.push([xx,yy]);
+    }
+    if (!cells.length) return false;
+    const [xx,yy] = RNG.pick(cells);
+    d.groundItems.push({ x:xx, y:yy, item: makeItem("scrap") });
+    return true;
+  },
+
+  _tryDrillMove(e, def){
+    const st = this.st, d = st.dungeon, p = st.player;
+    const dx = Math.sign(p.x - e.x), dy = Math.sign(p.y - e.y);
+    const adx = Math.abs(p.x - e.x), ady = Math.abs(p.y - e.y);
+    if (!(e.x === p.x || e.y === p.y || adx === ady)) return false;
+    if (Math.max(adx, ady) > 6) return false;
+    const nx = e.x + dx, ny = e.y + dy;
+    if (nx === p.x && ny === p.y){ this._enemyMelee(e, def); return true; }
+    if (d.map[ny] && d.map[ny][nx] === T.WALL){
+      d.map[ny][nx] = T.FLOOR;
+      this._addBurst(nx, ny, "#c46f35");
+      if (st.visible[e.y][e.x]) UI.log(`${def.name}が壁を掘削した!`, "warn");
+      AUDIO.sfx("hit");
+      return true;
+    }
+    if (this._enemyWalkable(e, nx, ny, dx, dy)){
+      e.x = nx; e.y = ny;
+      this._addPop(e.x, e.y, "突進", "#c46f35");
+      return true;
+    }
+    return false;
   },
 
   _canMeleeFrom(x, y){
@@ -794,16 +1088,17 @@ const GAME = {
       AUDIO.sfx("miss");
       return;
     }
-    const dmg = this._calcDamage(e.atk, this._playerDef());
+    const dmg = this._calcDamage(this._enemyAtk(e, def), this._playerDef());
     UI.log(`${def.name}の攻撃! ${dmg}のダメージ!`, "dmg");
     if (this._damagePlayer(dmg, def.name)) return;
-    // 腐食粘体: 武器を錆びさせる
-    if (def.special === "rust" && RNG.chance(.3)){
-      const w = p.inv.find(i => i.uid === p.weapon);
-      if (w && (w.plus||0) > -3){
-        w.plus = (w.plus||0) - 1;
+    // 研磨機など: 装備を削る。武器優先、なければ防具。
+    if (def.special === "rust" && RNG.chance(.35)){
+      const candidates = [p.weapon, p.armor].map(uid => p.inv.find(i => i.uid === uid)).filter(Boolean);
+      const gear = candidates.find(i => (i.plus||0) > -3);
+      if (gear){
+        gear.plus = (gear.plus||0) - 1;
         AUDIO.sfx("rust");
-        UI.log(`${ITEMS[w.id].name}が腐食した…!`, "warn");
+        UI.log(`${ITEMS[gear.id].name}が研磨され、性能が落ちた…!`, "warn");
       }
     }
   },
@@ -1298,10 +1593,36 @@ const GAME = {
       this._drawActorsDungeon(ctx, tp, now, frame);
     }
 
-    // エフェクト
+    // ミニマップの点滅アニメ用に約8fpsで再描画
+    if (st.mode === "dungeon" && (!this._mmLast || now - this._mmLast > 120)){
+      this._mmLast = now;
+      UI.drawMinimap(st);
+    }
+
+    // エフェクト(カメラ変換内)
     this._drawEffects(ctx, tp, now);
 
     ctx.restore();
+
+    // --- 画面空間オーバーレイ(カメラ変換の外) ---
+    // ロボットステーション起動時の赤フラッシュ
+    if (this._stationFlash && now - this._stationFlash < 600){
+      const k = 1 - (now - this._stationFlash) / 600;
+      ctx.fillStyle = `rgba(255,60,50,${0.5*k})`;
+      ctx.fillRect(0, 0, cw, ch);
+    }
+    // ステーションが起動中(敵が残っている間)は赤い縁を点滅
+    if (st.mode === "dungeon" && st.dungeon.station && st.dungeon.station.triggered){
+      const alive = st.dungeon.enemies.some(e => e.station);
+      if (alive){
+        const pulse = 0.3 + 0.25 * Math.sin(now/200);
+        const grad = ctx.createRadialGradient(cw/2, ch/2, Math.min(cw,ch)*0.35, cw/2, ch/2, Math.max(cw,ch)*0.7);
+        grad.addColorStop(0, "rgba(255,40,40,0)");
+        grad.addColorStop(1, `rgba(255,40,40,${pulse})`);
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, cw, ch);
+      }
+    }
   },
 
   _dirKey(dir){
@@ -1672,7 +1993,7 @@ const GAME = {
     const fbs = (e.primed && SPR.enemy[e.id+"_primed"]) ? SPR.enemy[e.id+"_primed"] : SPR.enemy[e.id];
     const fb = fbs ? fbs[frame] : null;
     const isBoss = def.ai === "boss";
-    const scale = isBoss ? 1.5 : (def.body === "golem" || def.body === "arm" || def.body === "grendel" ? 1.18 : 0.95);
+    const scale = isBoss ? 1.5 : (def.body === "golem" || def.body === "arm" || def.body === "grendel" || e.id === "coreDefender" || e.id === "dismantler" ? 1.18 : 0.95);
     let lungeT = null, lungeDir = null;
     if (e.lunge){
       lungeT = (now - e.lunge.t0) / CONFIG.ATTACK_MS;

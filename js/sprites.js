@@ -524,34 +524,39 @@ function buildAllSprites(){
 }
 
 // ============================================================
-// v19: 画像アセット ↔ ゲーム要素 のマッピング層
+// v21.5.0: 画像アセット ↔ ゲーム要素 のマッピング層
 //   画像があれば立ち絵/タイル画像を返し、なければコード生成にフォールバック
 // ============================================================
 
-// --- 敵ID → 立ち絵キャラのキー ---
-const ENEMY_PORTRAIT = {
-  rustMouse: "char.cleaner",      // 小型清掃機
-  pickBit:   "char.sorter",       // 仕分け機(小型・近接)
-  guardDrone:"char.guardian",     // 警備(遠距離)… ※下のガーディアンと差別化のため色味は別途
-  slime:     "char.cleaner",      // 腐食(暫定: 清掃機を緑寄せ)
-  arm:       "char.dismantler",   // 解体アーム
-  boomCell:  "char.sorter",       // 自爆(仕分け機ベース)
-  repairBit: "char.medic",        // 修復(医療系の見た目)
-  golem:     "char.dismantler",   // ゴーレム(解体機の大型)
-  phantom:   "char.hunter",       // 幻影(ハンター)
-  hunter:    "char.hunter",       // 高速ハンター
-  grendel:   "char.guardian",     // 重廃機(ガーディアン大型)
-  sentinel:  "char.soldier",      // コアガーディアン(兵装)
-  warden:    "char.guardian",     // 番人(ガーディアン・特大)
-};
-// 敵ごとの色味補正(同じ画像を使い回す敵を差別化するための淡い着色)
-const ENEMY_TINT = {
-  slime:   { color:"#7ed47e", alpha:0.30 },
-  phantom: { color:"#c08bff", alpha:0.32 },
-  boomCell:{ color:"#ff5d4d", alpha:0.18 },
-  guardDrone:{ color:"#5aa0d8", alpha:0.16 },
-  sentinel:{ color:"#3ddad7", alpha:0.18 },
-  warden:  { color:"#ffd24a", alpha:0.14 },
+// --- 敵ID → 立ち絵キー ---
+// dedicated が存在すれば敵専用画像を使う。未配置なら fallback と fallbackTint で従来表示に戻す。
+const ENEMY_ART = {
+  cleaner:        { dedicated:"enemy.cleaner",        fallback:"char.cleaner" },
+  collectorDrone: { dedicated:"enemy.collectorDrone", fallback:"char.sorter",     fallbackTint:{ color:"#caa23a", alpha:0.10 } },
+  guardDrone:     { dedicated:"enemy.guardDrone",     fallback:"char.guardian",   fallbackTint:{ color:"#5aa0d8", alpha:0.16 } },
+  cutter:         { dedicated:"enemy.cutter",         fallback:"char.dismantler", fallbackTint:{ color:"#d8743a", alpha:0.12 } },
+  suctionUnit:    { dedicated:"enemy.suctionUnit",    fallback:"char.cleaner",    fallbackTint:{ color:"#8fd0ff", alpha:0.24 } },
+  grinder:        { dedicated:"enemy.grinder",        fallback:"char.cleaner",    fallbackTint:{ color:"#b8b2a4", alpha:0.28 } },
+  welder:         { dedicated:"enemy.welder",         fallback:"char.soldier",    fallbackTint:{ color:"#ff8a3d", alpha:0.18 } },
+  compressor:     { dedicated:"enemy.compressor",     fallback:"char.dismantler", fallbackTint:{ color:"#8a8f96", alpha:0.16 } },
+  boomCell:       { dedicated:"enemy.boomCell",       fallback:"char.sorter",     fallbackTint:{ color:"#ff5d4d", alpha:0.18 } },
+  repairBit:      { dedicated:"enemy.repairBit",      fallback:"char.medic" },
+  supplyPod:      { dedicated:"enemy.supplyPod",      fallback:"char.medic",      fallbackTint:{ color:"#ffd24a", alpha:0.18 } },
+  carrier:        { dedicated:"enemy.carrier",        fallback:"char.hunter",     fallbackTint:{ color:"#caa25a", alpha:0.18 } },
+  dumper:         { dedicated:"enemy.dumper",         fallback:"char.dismantler", fallbackTint:{ color:"#a8763a", alpha:0.16 } },
+  shieldDeployer: { dedicated:"enemy.shieldDeployer", fallback:"char.guardian",   fallbackTint:{ color:"#5aa0d8", alpha:0.18 } },
+  alarmBeacon:    { dedicated:"enemy.alarmBeacon",    fallback:"char.sorter",     fallbackTint:{ color:"#ff5d4d", alpha:0.22 } },
+  drillRig:       { dedicated:"enemy.drillRig",       fallback:"char.dismantler", fallbackTint:{ color:"#c46f35", alpha:0.16 } },
+  scoutEye:       { dedicated:"enemy.scoutEye",       fallback:"char.sorter",     fallbackTint:{ color:"#3ddad7", alpha:0.18 } },
+  magnetUnit:     { dedicated:"enemy.magnetUnit",     fallback:"char.guardian",   fallbackTint:{ color:"#7a8fa6", alpha:0.18 } },
+  mistSprayer:    { dedicated:"enemy.mistSprayer",    fallback:"char.cleaner",    fallbackTint:{ color:"#7ed47e", alpha:0.30 } },
+  cooler:         { dedicated:"enemy.cooler",         fallback:"char.soldier",    fallbackTint:{ color:"#8fd0ff", alpha:0.22 } },
+  camouflageUnit: { dedicated:"enemy.camouflageUnit", fallback:"char.hunter",     fallbackTint:{ color:"#c08bff", alpha:0.32 } },
+  splitterBit:    { dedicated:"enemy.splitterBit",    fallback:"char.sorter",     fallbackTint:{ color:"#d8d2c4", alpha:0.18 } },
+  sniperTurret:   { dedicated:"enemy.sniperTurret",   fallback:"char.soldier",    fallbackTint:{ color:"#3ddad7", alpha:0.18 } },
+  dismantler:     { dedicated:"enemy.dismantler",     fallback:"char.guardian",   fallbackTint:{ color:"#6a4a8a", alpha:0.20 } },
+  coreDefender:   { dedicated:"enemy.coreDefender",   fallback:"char.guardian",   fallbackTint:{ color:"#ffd24a", alpha:0.16 } },
+  warden:         { dedicated:"enemy.warden",         fallback:"char.guardian",   fallbackTint:{ color:"#ffd24a", alpha:0.14 } },
 };
 
 // --- NPC body → 立ち絵キーは npc定義の body をそのまま使う(村人) ---
@@ -587,8 +592,9 @@ function playerPortrait(mode){
   return ASSETS.get(mode === "village" ? "char.player_town" : "char.player_dungeon");
 }
 function enemyPortrait(id){
-  const key = ENEMY_PORTRAIT[id] || "char.cleaner";
-  return tintedPortrait(key, ENEMY_TINT[id]);
+  const art = ENEMY_ART[id] || { fallback:"char.cleaner" };
+  if (art.dedicated && ASSETS.has(art.dedicated)) return ASSETS.get(art.dedicated);
+  return tintedPortrait(art.fallback || "char.cleaner", art.fallbackTint);
 }
 function npcPortrait(body){
   return ASSETS.get(NPC_PORTRAIT[body] || "char.builder");

@@ -70,6 +70,12 @@ const AUDIO = {
       case "throw":  this.tone(700,.1,"sine",.08,t,300); break;
       case "zap":    this.tone(1200,.15,"sawtooth",.14,t,200); this.noise(.1,.08,t,3000); break;
       case "boom":   this.noise(.4,.3,t,500); this.tone(70,.35,"sawtooth",.2,t,30); break;
+      case "alarm":  // 警報クラクション(2回鳴る)
+        this.tone(440,.18,"sawtooth",.16,t,660);
+        this.tone(440,.18,"sawtooth",.16,t+.22,660);
+        this.tone(330,.3,"square",.1,t+.05);
+        this.noise(.5,.06,t,2000);
+        break;
       case "stairs": [392,330,262,196].forEach((f,i)=>this.tone(f,.12,"triangle",.12,t+i*.09)); break;
       case "lvup":   [523,659,784,1047].forEach((f,i)=>this.tone(f,.12,"square",.1,t+i*.08)); break;
       case "trap":   this.tone(200,.12,"sawtooth",.15,t,90); break;

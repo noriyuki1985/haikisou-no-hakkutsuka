@@ -73,35 +73,64 @@ const UI = {
     const cv = this.el["minimap"];
     if (st.mode !== "dungeon"){ cv.style.display = "none"; return; }
     cv.style.display = "block";
-    const d = st.dungeon, sc = 3;
-    cv.width = d.W * sc; cv.height = d.H * sc;
-    cv.style.width = `${d.W * sc}px`; cv.style.height = `${d.H * sc}px`;
+    const d = st.dungeon, sc = 4;          // 拡大(3→4)で見やすく
+    const pad = 2;
+    cv.width = d.W * sc + pad*2; cv.height = d.H * sc + pad*2;
+    cv.style.width = `${cv.width}px`; cv.style.height = `${cv.height}px`;
     const g = this.mm;
     g.clearRect(0,0,cv.width,cv.height);
+    const ox = pad, oy = pad;
+    // 床・通路
     for (let y = 0; y < d.H; y++){
       for (let x = 0; x < d.W; x++){
         if (!d.explored[y][x]) continue;
         const t = d.map[y][x];
         if (t === T.WALL) continue;
-        g.fillStyle = (t === T.STAIRS) ? "#f5a623"
-                    : (t === T.PEDESTAL) ? "#3ddad7"
-                    : (t === T.CORRIDOR) ? "#3a444d" : "#5a646e";
-        g.fillRect(x*sc, y*sc, sc, sc);
+        g.fillStyle = (t === T.CORRIDOR) ? "#39424b" : "#626d78";
+        g.fillRect(ox+x*sc, oy+y*sc, sc, sc);
       }
     }
-    // 道具
-    g.fillStyle = "#ffd24a";
+    const now = performance.now();
+    const blink = (Math.sin(now/250) > 0);
+    // アイテム(種別色のドット)
     for (const gi of d.groundItems){
-      if (d.explored[gi.y][gi.x]) g.fillRect(gi.x*sc, gi.y*sc+1, sc, sc-1);
+      if (!d.explored[gi.y][gi.x]) continue;
+      const cat = ITEMS[gi.item.id] ? ITEMS[gi.item.id].cat : "device";
+      g.fillStyle = ({food:"#ffce5a", med:"#9be89b", chip:"#4fe8e4", rod:"#ffae50",
+                      throw:"#ff785a", weapon:"#ffb45a", armor:"#8cc8ff", quest:"#4fe8e4"})[cat] || "#ffd24a";
+      g.fillRect(ox+gi.x*sc+1, oy+gi.y*sc+1, sc-1, sc-1);
     }
-    // 視界内の敵
-    g.fillStyle = "#ff5d4d";
+    // 階段/リフト/コア台座(点滅アイコン)
+    for (let y = 0; y < d.H; y++){
+      for (let x = 0; x < d.W; x++){
+        if (!d.explored[y][x]) continue;
+        const t = d.map[y][x];
+        if (t === T.STAIRS){
+          g.fillStyle = blink ? (d.liftUp ? "#ffd24a" : "#ffb53d") : "#7a5a1a";
+          g.fillRect(ox+x*sc-1, oy+y*sc-1, sc+2, sc+2);
+        } else if (t === T.PEDESTAL){
+          g.fillStyle = blink ? "#4fe8e4" : "#1a6a68";
+          g.fillRect(ox+x*sc-1, oy+y*sc-1, sc+2, sc+2);
+        }
+      }
+    }
+    // 視界内の敵(ステーション敵は一回り大きく)
     for (const e of d.enemies){
-      if (st.visible[e.y] && st.visible[e.y][e.x]) g.fillRect(e.x*sc, e.y*sc, sc, sc);
+      if (!(st.visible[e.y] && st.visible[e.y][e.x])) continue;
+      const isBoss = ENEMIES[e.id] && ENEMIES[e.id].ai === "boss";
+      g.fillStyle = isBoss ? "#ff3838" : (e.station ? "#ff785a" : "#ff5d4d");
+      const s2 = isBoss ? sc+2 : sc;
+      g.fillRect(ox+e.x*sc - (s2-sc)/2, oy+e.y*sc - (s2-sc)/2, s2, s2);
     }
-    // 自分
+    // 自分(向きの小矢印付き)
     g.fillStyle = "#fff6d8";
-    g.fillRect(st.player.x*sc-1, st.player.y*sc-1, sc+2, sc+2);
+    g.fillRect(ox+st.player.x*sc-1, oy+st.player.y*sc-1, sc+2, sc+2);
+
+    // ステーション起動中は枠を赤く点滅
+    const active = d.station && d.station.triggered && d.enemies.some(e=>e.station);
+    g.lineWidth = 2;
+    g.strokeStyle = active ? (blink ? "#ff3838" : "#7a1a1a") : "rgba(184,137,63,0.6)";
+    g.strokeRect(1, 1, cv.width-2, cv.height-2);
   },
 
   // ---------- 汎用ダイアログ ----------

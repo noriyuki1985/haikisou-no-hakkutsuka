@@ -10,7 +10,7 @@ const INPUT = {
   tapCount: 0, tapDir: 0, lastTapTime: 0,
   HOLD_DELAY: 340,   // 押してから連続移動が始まるまでの猶予(ms)
   HOLD_STEP: 165,    // 連続移動の1歩あたりの最短間隔(ms)
-  TAP_WINDOW: 320,   // 連続タップとみなす間隔(ms)。3回でダッシュ
+  TAP_WINDOW: 360,   // 連続タップとみなす間隔(ms)。4回でダッシュ
   DEADZONE: 0.42,    // 自分中心からこの割合(タイル比)以内のタップは「足元」
   enabled: true,
 
@@ -58,8 +58,8 @@ const INPUT = {
         this.tapDir = dir;
       }
       this.lastTapTime = now;
-      // 3回目でダッシュ
-      if (this.tapCount >= 3){
+      // 4回目でダッシュ
+      if (this.tapCount >= 4){
         this.tapCount = 0;
         this.lastTapTime = 0;
         this._stopHold();

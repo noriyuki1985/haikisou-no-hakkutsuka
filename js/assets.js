@@ -1,5 +1,5 @@
 // ============================================================
-// 画像アセットのロードと管理(v19)
+// 画像アセットのロードと管理(v21.5.0)
 //  - 立ち絵キャラ / タイル / アイテム / 背景 / エフェクト を読み込む
 //  - 読み込み失敗時は sprites.js のコード生成にフォールバック
 // ============================================================
@@ -8,6 +8,7 @@ const ASSETS = {
   img: {},          // key -> HTMLImageElement (loaded)
   ready: false,
   loaded: 0, total: 0,
+  missing: {},
 
   // アセット定義(パスは index.html からの相対)
   manifest: {
@@ -60,10 +61,43 @@ const ASSETS = {
     "fx.shutdown":  "assets/fx/terminal_shutdown.png",
   },
 
+  // 将来追加する敵専用画像。未配置でも起動を止めず、sprites.js 側で既存画像へフォールバックする。
+  optionalManifest: {
+    "enemy.cleaner":        "assets/enemies/cleaner.png",
+    "enemy.collectorDrone": "assets/enemies/collector_drone.png",
+    "enemy.guardDrone":     "assets/enemies/guard_drone.png",
+    "enemy.cutter":         "assets/enemies/cutter.png",
+    "enemy.suctionUnit":    "assets/enemies/suction_unit.png",
+    "enemy.grinder":        "assets/enemies/grinder.png",
+    "enemy.welder":         "assets/enemies/welder.png",
+    "enemy.compressor":     "assets/enemies/compressor.png",
+    "enemy.boomCell":       "assets/enemies/boomcell.png",
+    "enemy.repairBit":      "assets/enemies/repairbit.png",
+    "enemy.supplyPod":      "assets/enemies/supply_pod.png",
+    "enemy.carrier":        "assets/enemies/carrier.png",
+    "enemy.dumper":         "assets/enemies/dumper.png",
+    "enemy.shieldDeployer": "assets/enemies/shield_deployer.png",
+    "enemy.alarmBeacon":    "assets/enemies/alarm_beacon.png",
+    "enemy.drillRig":       "assets/enemies/drill_rig.png",
+    "enemy.scoutEye":       "assets/enemies/scout_eye.png",
+    "enemy.magnetUnit":     "assets/enemies/magnet_unit.png",
+    "enemy.mistSprayer":    "assets/enemies/mist_sprayer.png",
+    "enemy.cooler":         "assets/enemies/cooler.png",
+    "enemy.camouflageUnit": "assets/enemies/camouflage_unit.png",
+    "enemy.splitterBit":    "assets/enemies/splitter_bit.png",
+    "enemy.sniperTurret":   "assets/enemies/sniper_turret.png",
+    "enemy.dismantler":     "assets/enemies/dismantler.png",
+    "enemy.coreDefender":   "assets/enemies/core_defender.png",
+    "enemy.warden":         "assets/enemies/warden.png",
+  },
+
   load(onProgress){
-    const keys = Object.keys(this.manifest);
+    const allManifest = Object.assign({}, this.manifest, this.optionalManifest || {});
+    const keys = Object.keys(allManifest);
     this.total = keys.length;
     this.loaded = 0;
+    this.ready = false;
+    this.missing = {};
     return new Promise(resolve => {
       if (!keys.length){ this.ready = true; resolve(); return; }
       keys.forEach(key => {
@@ -75,16 +109,17 @@ const ASSETS = {
           if (this.loaded >= this.total){ this.ready = true; resolve(); }
         };
         im.onerror = () => {
-          // 失敗してもフォールバックがあるので続行
+          this.missing[key] = true;
           this.loaded++;
           if (onProgress) onProgress(this.loaded, this.total);
           if (this.loaded >= this.total){ this.ready = true; resolve(); }
         };
-        im.src = this.manifest[key];
+        im.src = allManifest[key];
       });
     });
   },
 
   has(key){ return !!this.img[key]; },
+  isMissing(key){ return !!this.missing[key]; },
   get(key){ return this.img[key] || null; },
 };

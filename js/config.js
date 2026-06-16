@@ -3,7 +3,7 @@
 // ============================================================
 "use strict";
 const CONFIG = {
-  VERSION: "v20.0.0",
+  VERSION: "v21.5.0",
   TILE: 32,            // 論理タイルサイズ(px)
   SPRITE: 16,          // ドット絵の解像度
   MAX_FLOOR: 30,       // 最深部
@@ -107,46 +107,84 @@ function itemTableFor(floor){
 }
 
 // ------------------------------------------------------------
-// 敵定義
-//   ai: melee / ranged / slow / kamikaze / healer / phantom / fast / boss
-//   special: rust(武器を錆びさせる)
+// 敵定義(v21.5.0)
+//   25体の軸敵 + 30F固定ラスボス。
+//   今回は「名前・出現階層・役割・画像枠」の整備が目的。
+//   ai は既存ロジックへ寄せる: melee / ranged / slow / kamikaze / healer / phantom / fast / boss
+//   role は設計上の役割。未実装の固有挙動は role で保持し、後続バージョンでAI化する。
 // ------------------------------------------------------------
 const ENEMIES = {
-  rustMouse: { name:"ラストマウス", hp:6,  atk:3,  def:0, exp:4,  ai:"melee",
-               floors:[1,5],  body:"mouse",  hue:"#b06a3a" },
-  pickBit:   { name:"ピックビット", hp:9,  atk:5,  def:1, exp:7,  ai:"melee",
-               floors:[2,7],  body:"bit",    hue:"#caa23a" },
-  guardDrone:{ name:"警備ドローン", hp:13, atk:6,  def:2, exp:13, ai:"ranged", range:6,
-               floors:[3,10], body:"drone",  hue:"#5aa0d8" },
-  slime:     { name:"腐食粘体",     hp:16, atk:7,  def:1, exp:15, ai:"melee", special:"rust",
-               floors:[4,11], body:"slime",  hue:"#7ed47e" },
-  arm:       { name:"解体アーム",   hp:26, atk:14, def:3, exp:24, ai:"slow",
-               floors:[6,13], body:"arm",    hue:"#d8743a" },
-  boomCell:  { name:"自爆セル",     hp:12, atk:0,  def:1, exp:18, ai:"kamikaze", blastDmg:30,
-               floors:[7,15], body:"boom",   hue:"#ff5d4d" },
-  repairBit: { name:"修復ビット",   hp:14, atk:2,  def:2, exp:26, ai:"healer", healAmt:8,
-               floors:[9,17], body:"healer", hue:"#9fe08a" },
-  golem:     { name:"ジャンクゴーレム", hp:48, atk:16, def:7, exp:45, ai:"melee",
-               floors:[10,19], body:"golem", hue:"#8a8f96" },
-  phantom:   { name:"ファントムユニット", hp:30, atk:18, def:4, exp:50, ai:"phantom",
-               floors:[13,22], body:"phantom", hue:"#c08bff" },
-  hunter:    { name:"ハンターキラー", hp:38, atk:20, def:6, exp:70, ai:"fast", speed:2,
-               floors:[16,26], body:"hunter", hue:"#ff8a3d" },
-  grendel:   { name:"重廃機グランドル", hp:70, atk:26, def:10, exp:110, ai:"melee",
-               floors:[20,29], body:"grendel", hue:"#6a4a8a" },
-  sentinel:  { name:"コア・ガーディアン", hp:55, atk:22, def:8, exp:90, ai:"ranged", range:7,
-               floors:[24,30], body:"sentinel", hue:"#3ddad7" },
-  warden:    { name:"廃棄層の番人",  hp:150, atk:28, def:10, exp:0, ai:"boss", range:6,
-               floors:[30,30], body:"warden", hue:"#ffd24a" },
+  cleaner:       { name:"清掃機", hp:6,  atk:3,  def:0, exp:4,  ai:"melee",  role:"基本近接。低火力だが数で圧をかける", floors:[1,5],  body:"mouse",    hue:"#b06a3a" },
+  collectorDrone:{ name:"回収ドローン", hp:9,  atk:4,  def:1, exp:7,  ai:"collector", speed:2, role:"落ちているアイテムを拾って逃げる。倒すと拾った物を落とす", floors:[2,8],  body:"bit",      hue:"#caa23a" },
+  guardDrone:    { name:"警備ドローン", hp:13, atk:6,  def:2, exp:13, ai:"ranged", range:6, role:"遠距離射撃。射線管理を要求", floors:[3,18], body:"drone",    hue:"#5aa0d8" },
+  cutter:        { name:"切断機", hp:18, atk:10, def:2, exp:18, ai:"melee",  role:"高火力近接。隣接を避けたい敵", floors:[4,12], body:"arm",      hue:"#d8743a" },
+  suctionUnit:   { name:"吸引機", hp:20, atk:7,  def:2, exp:20, ai:"suction", range:4, role:"直線上の主人公を吸引して引き寄せる", floors:[5,13], body:"drone",    hue:"#8fd0ff" },
+
+  grinder:       { name:"研磨機", hp:16, atk:7,  def:1, exp:16, ai:"melee", special:"rust", role:"装備劣化。攻撃時に武器を削る", floors:[4,14], body:"slime",    hue:"#b8b2a4" },
+  welder:        { name:"溶接機", hp:22, atk:11, def:2, exp:22, ai:"ranged", range:4, role:"火花・燃焼床想定。現状は短射程射撃", floors:[6,15], body:"sentinel", hue:"#ff8a3d" },
+  compressor:    { name:"圧縮機", hp:30, atk:14, def:4, exp:28, ai:"slow",   role:"ノックバック・壁衝突想定。現状は鈍足高火力", floors:[6,16], body:"golem",    hue:"#8a8f96" },
+  boomCell:      { name:"自爆セル", hp:12, atk:0,  def:1, exp:18, ai:"kamikaze", blastDmg:30, role:"接近後に自爆。敵も巻き込む", floors:[7,17], body:"boom", hue:"#ff5d4d" },
+  repairBit:     { name:"修復ビット", hp:14, atk:2,  def:2, exp:26, ai:"healer", healAmt:8, role:"敵回復。優先処理対象", floors:[8,30], body:"healer", hue:"#9fe08a" },
+
+  supplyPod:     { name:"補給ポッド", hp:18, atk:3,  def:3, exp:26, ai:"buffer", buffAmt:4, buffTurns:8, role:"周囲の敵を強化する補助機", floors:[8,28], body:"healer", hue:"#ffd24a" },
+  carrier:       { name:"搬送機", hp:24, atk:8,  def:3, exp:30, ai:"fast", speed:2, role:"敵や主人公の位置操作想定。現状は高速敵", floors:[9,20], body:"hunter", hue:"#caa25a" },
+  dumper:        { name:"投棄機", hp:28, atk:12, def:4, exp:34, ai:"dumper", range:5, role:"廃材を投げ、着弾地点に鉄くずを残す", floors:[10,21], body:"sentinel", hue:"#a8763a" },
+  shieldDeployer:{ name:"展開シールド", hp:26, atk:4,  def:6, exp:36, ai:"shielder", shieldTurns:6, role:"周囲の敵に一時シールドを張る", floors:[10,30], body:"healer", hue:"#5aa0d8" },
+  alarmBeacon:   { name:"警報ビーコン", hp:20, atk:0,  def:2, exp:35, ai:"beacon", range:7, summonDelay:3, role:"発見後に警報を鳴らし増援を呼ぶ", floors:[11,28], body:"sentinel", hue:"#ff5d4d" },
+
+  drillRig:      { name:"掘削機", hp:34, atk:15, def:5, exp:42, ai:"drill", role:"壁を破壊しながら直線突進する", floors:[12,23], body:"arm", hue:"#c46f35" },
+  scoutEye:      { name:"索敵アイ", hp:18, atk:5,  def:2, exp:32, ai:"fast", speed:2, role:"敵誘導・索敵支援想定。現状は高速小型", floors:[12,30], body:"bit", hue:"#3ddad7" },
+  magnetUnit:    { name:"磁力機", hp:28, atk:10, def:4, exp:44, ai:"melee", role:"金属装備干渉想定。現状は近接敵", floors:[13,27], body:"golem", hue:"#7a8fa6" },
+  mistSprayer:   { name:"毒霧散布機", hp:30, atk:9,  def:3, exp:46, ai:"ranged", range:4, role:"範囲状態異常想定。現状は短射程射撃", floors:[14,30], body:"slime", hue:"#7ed47e" },
+  cooler:        { name:"冷却機", hp:32, atk:10, def:5, exp:48, ai:"slow", role:"鈍足・凍結想定。現状は鈍足耐久敵", floors:[15,30], body:"sentinel", hue:"#8fd0ff" },
+
+  camouflageUnit:{ name:"光学迷彩機", hp:30, atk:18, def:4, exp:50, ai:"phantom", role:"見えにくい奇襲。現状は転移奇襲", floors:[16,30], body:"phantom", hue:"#c08bff" },
+  splitterBit:   { name:"分裂ビット", hp:24, atk:8,  def:3, exp:52, ai:"fast", speed:2, role:"増殖想定。現状は高速小型", floors:[17,30], body:"bit", hue:"#d8d2c4" },
+  sniperTurret:  { name:"狙撃砲台", hp:38, atk:20, def:7, exp:70, ai:"ranged", range:8, role:"長射程固定敵想定。現状は長射程射撃", floors:[18,30], body:"sentinel", hue:"#3ddad7" },
+  dismantler:    { name:"解体重機", hp:70, atk:26, def:10, exp:110, ai:"slow", role:"大型近接強敵。鈍足・高耐久・高火力", floors:[20,30], body:"grendel", hue:"#6a4a8a" },
+  coreDefender:  { name:"中枢防衛機", hp:60, atk:22, def:8, exp:95, ai:"ranged", range:7, role:"終盤防衛機。射撃と支援混在の中ボス枠", floors:[25,30], body:"warden", hue:"#ffd24a" },
+
+  // ラスボス。25体の軸敵とは別に、B30F固定配置で使用する。
+  warden:        { name:"廃棄層の番人", hp:150, atk:28, def:10, exp:0, ai:"boss", range:6, role:"最深部固定ボス", floors:[30,30], body:"warden", hue:"#ffd24a" },
 };
+
+// 30階出現テーブル(v21.5.0)
+// 通常枠=10、支援/低頻度=5、危険/レア=3 を目安にした明示テーブル。
+const ENEMY_FLOOR_TABLE = {
+  1:  [["cleaner",10]],
+  2:  [["cleaner",10],["collectorDrone",10]],
+  3:  [["cleaner",10],["collectorDrone",10],["guardDrone",10]],
+  4:  [["cleaner",10],["guardDrone",10],["cutter",10],["grinder",5]],
+  5:  [["collectorDrone",10],["guardDrone",10],["cutter",10],["grinder",5],["suctionUnit",3]],
+  6:  [["cutter",10],["grinder",10],["welder",10],["guardDrone",5],["compressor",3]],
+  7:  [["cutter",10],["welder",10],["boomCell",10],["suctionUnit",5],["compressor",3]],
+  8:  [["welder",10],["boomCell",10],["repairBit",10],["supplyPod",5],["compressor",3]],
+  9:  [["grinder",10],["boomCell",10],["carrier",10],["repairBit",5],["supplyPod",5],["compressor",3]],
+  10: [["welder",10],["carrier",10],["dumper",10],["repairBit",5],["shieldDeployer",5],["boomCell",3]],
+  11: [["guardDrone",10],["dumper",10],["alarmBeacon",10],["shieldDeployer",5],["boomCell",3]],
+  12: [["cutter",10],["alarmBeacon",10],["drillRig",10],["scoutEye",5],["dumper",3]],
+  13: [["grinder",10],["drillRig",10],["magnetUnit",10],["scoutEye",5],["alarmBeacon",3]],
+  14: [["welder",10],["magnetUnit",10],["mistSprayer",10],["shieldDeployer",5],["drillRig",3]],
+  15: [["compressor",10],["mistSprayer",10],["cooler",10],["supplyPod",5],["repairBit",5],["alarmBeacon",3]],
+  16: [["guardDrone",10],["cooler",10],["camouflageUnit",10],["scoutEye",5],["mistSprayer",3]],
+  17: [["camouflageUnit",10],["splitterBit",10],["magnetUnit",10],["repairBit",5],["cooler",3]],
+  18: [["guardDrone",10],["splitterBit",10],["sniperTurret",10],["shieldDeployer",5],["camouflageUnit",3]],
+  19: [["sniperTurret",10],["camouflageUnit",10],["splitterBit",10],["repairBit",5],["supplyPod",5],["mistSprayer",3]],
+  20: [["drillRig",10],["sniperTurret",10],["dismantler",10],["shieldDeployer",5],["boomCell",3]],
+  21: [["dismantler",10],["mistSprayer",10],["alarmBeacon",10],["repairBit",5],["shieldDeployer",5],["camouflageUnit",3]],
+  22: [["dismantler",10],["drillRig",10],["magnetUnit",10],["supplyPod",5],["scoutEye",5],["sniperTurret",3]],
+  23: [["drillRig",10],["cooler",10],["splitterBit",10],["repairBit",5],["dismantler",3]],
+  24: [["scoutEye",10],["camouflageUnit",10],["sniperTurret",10],["shieldDeployer",5],["magnetUnit",3]],
+  25: [["mistSprayer",10],["cooler",10],["dismantler",10],["repairBit",5],["supplyPod",5],["coreDefender",3]],
+  26: [["camouflageUnit",10],["splitterBit",10],["sniperTurret",10],["scoutEye",5],["shieldDeployer",5],["dismantler",3]],
+  27: [["splitterBit",10],["magnetUnit",10],["cooler",10],["repairBit",5],["coreDefender",3]],
+  28: [["sniperTurret",10],["dismantler",10],["alarmBeacon",10],["shieldDeployer",5],["supplyPod",5],["camouflageUnit",3]],
+  29: [["dismantler",10],["coreDefender",10],["splitterBit",10],["repairBit",5],["scoutEye",5],["sniperTurret",3]],
+  30: [["coreDefender",10],["dismantler",10],["sniperTurret",10],["repairBit",5],["shieldDeployer",5],["splitterBit",3]],
+};
+
 function enemyTableFor(floor){
-  const t = [];
-  for (const id in ENEMIES){
-    const e = ENEMIES[id];
-    if (e.ai === "boss") continue;
-    if (floor >= e.floors[0] && floor <= e.floors[1]) t.push([id, 10]);
-  }
-  return t;
+  return ENEMY_FLOOR_TABLE[floor] || [["cleaner",10]];
 }
 // 階層が深いほど敵が強くなる係数
 function enemyScale(floor){ return 1 + Math.max(0, floor - 1) * 0.035; }

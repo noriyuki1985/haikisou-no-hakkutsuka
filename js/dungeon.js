@@ -140,8 +140,51 @@ function genDungeon(floor){
     else enemies.push(makeEnemy("warden", tx, clamp(ty+1,1,H-2), floor));
   }
 
+  // ロボットステーション(モンスターハウス)
+  //   B3F以降、確率で1部屋を「敵で満ちた部屋」にする。深いほど出やすい。
+  let station = null;
+  if (!isLast && floor >= 3){
+    const chance = Math.min(0.30, 0.05 + floor * 0.012); // B3F:約9% → B20F:約29%
+    // 開始部屋と階段部屋は避ける
+    const startRid = roomId[start[1]][start[0]];
+    const stairsRid = roomId[ty] ? roomId[ty][tx] : -1;
+    const candidates = rooms.filter(r => r.id !== startRid && r.id !== stairsRid && r.w*r.h >= 12);
+    if (candidates.length && RNG.chance(chance)){
+      const room = RNG.pick(candidates);
+      station = { roomId: room.id, triggered: false };
+      // 部屋の床マスを集める
+      const cells = [];
+      for (let y = room.y; y < room.y+room.h; y++)
+        for (let x = room.x; x < room.x+room.w; x++)
+          if (map[y][x] === T.FLOOR) cells.push([x,y]);
+      RNG.shuffle(cells);
+      // 敵を多めに(部屋面積の約45%、上限12)
+      const stationEnemyN = Math.min(12, Math.max(4, Math.floor(cells.length * 0.45)));
+      let placed = 0;
+      for (const [x,y] of cells){
+        if (placed >= stationEnemyN) break;
+        if (enemies.some(e => e.x===x && e.y===y)) continue;
+        const e = makeEnemy(weightedPick(etable), x, y, floor);
+        e.awake = false;       // 入室まで眠っている
+        e.station = true;
+        enemies.push(e);
+        placed++;
+      }
+      // 報酬アイテムを部屋に多めに配置(ハイリスク・ハイリターン)
+      const lootN = RNG.int(3, 5);
+      let lootPlaced = 0;
+      for (const [x,y] of cells){
+        if (lootPlaced >= lootN) break;
+        if (groundItems.some(g => g.x===x && g.y===y)) continue;
+        if (enemies.some(e => e.x===x && e.y===y && e.station)) continue;
+        groundItems.push({ x, y, item: makeItem(weightedPick(itable)) });
+        lootPlaced++;
+      }
+    }
+  }
+
   return { W, H, map, roomId, rooms, start, stairs, pedestal: isLast ? [tx,ty] : null,
-           groundItems, traps, enemies, floor,
+           groundItems, traps, enemies, floor, station,
            explored: new Array(H).fill(0).map(()=>new Array(W).fill(false)) };
 }
 
@@ -170,7 +213,8 @@ function makeEnemy(id, x, y, floor){
     exp: Math.round(def.exp * sc),
     dir: 2, anim: { fx:x, fy:y, frame:0 },
     stun: 0, primed: false, awake: false,
-    actGauge: 0,
+    actGauge: 0, shieldTurns: 0, buffTurns: 0, buffAmt: 0,
+    carryItem: null, alarmCharge: 0, boomTimer: 0,
   };
 }
 
