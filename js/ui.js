@@ -6,7 +6,7 @@ const UI = {
   el: {},
   init(){
     const ids = ["hud-floor","hud-hp","hp-bar","hud-lv","belly-bar","log","objective",
-      "inv-modal","inv-list","inv-actions","inv-desc","inv-modal-count","inv-count",
+      "inv-modal","inv-list","inv-actions","inv-desc","inv-modal-count","inv-count","hud-status",
       "dialog","dialog-text","dialog-buttons","talk","talk-name","talk-text",
       "floor-banner","minimap","menu-modal","dir-overlay","dir-msg","result-screen",
       "result-title","result-body"];
@@ -51,6 +51,15 @@ const UI = {
     this.el["hud-lv"].textContent = p.lv;
     this.el["belly-bar"].style.width = `${p.belly/CONFIG.HUNGER_MAX*100}%`;
     this.el["inv-count"].textContent = `${p.inv.length}/${CONFIG.INV_MAX}`;
+    const hs = this.el["hud-status"];
+    if (hs){
+      const chips = [];
+      if ((p.poisonTurns || 0) > 0) chips.push(`<span class="status-chip poison">毒 ${p.poisonTurns}T</span>`);
+      if ((p.slowTurns || 0) > 0) chips.push(`<span class="status-chip slow">鈍足 ${p.slowTurns}T</span>`);
+      if ((p.magnetizedTurns || 0) > 0) chips.push(`<span class="status-chip magnet">磁力 ${p.magnetizedTurns}T</span>`);
+      hs.innerHTML = chips.join("");
+      hs.classList.toggle("hidden", chips.length === 0);
+    }
     this.el["objective"].textContent = objectiveFor(st);
   },
 
@@ -154,11 +163,14 @@ const UI = {
   },
 
   // ---------- 会話 ----------
-  talkQueue: null, talkResolve: null,
+  talkQueue: null, talkResolve: null, talkName: "", talkLineIndex: 0, talkLineStartedAt: 0,
   talk(name, lines){
     return new Promise(resolve => {
       this.talkQueue = lines.slice();
       this.talkResolve = resolve;
+      this.talkName = name;
+      this.talkLineIndex = 0;
+      this.talkLineStartedAt = performance.now();
       this.el["talk-name"].textContent = name;
       this.el["talk-text"].textContent = this.talkQueue.shift();
       this.el["talk"].classList.remove("hidden");
@@ -168,16 +180,22 @@ const UI = {
   talkNext(){
     if (!this.talkResolve) return;
     if (this.talkQueue.length){
+      this.talkLineIndex++;
+      this.talkLineStartedAt = performance.now();
       this.el["talk-text"].textContent = this.talkQueue.shift();
       AUDIO.sfx("talk");
     } else {
       this.el["talk"].classList.add("hidden");
       const r = this.talkResolve;
       this.talkResolve = null;
+      this.talkName = "";
+      this.talkLineIndex = 0;
       r();
     }
   },
   get talking(){ return !!this.talkResolve; },
+  get talkingName(){ return this.talkName || ""; },
+  get talkPhase(){ return this.talking ? Math.max(0, performance.now() - (this.talkLineStartedAt || 0)) : 0; },
 
   // ---------- 道具 ----------
   invSel: -1,

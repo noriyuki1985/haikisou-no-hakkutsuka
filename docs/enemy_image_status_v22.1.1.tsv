@@ -1,0 +1,27 @@
+ID	表示名	画像ファイル	分類	現在の表示	画風	サイズ	透過	足元位置	修正優先度	メモ
+cleaner	清掃機	cleaner.png	既存流用	既存キャラ流用	要改善	OK(流用)	OK(流用)	OK(流用)	C	序盤雑魚。現状の流用表示でもプレイ上は成立。最後でよい。
+collectorDrone	回収ドローン	collector_drone.png	専用画像あり	assets/enemies/collector_drone.png	OK	OK	OK	OK	-	専用画像あり。表示規格OK。
+guardDrone	警備ドローン	guard_drone.png	既存流用	既存キャラ流用	要改善	OK(流用)	OK(流用)	OK(流用)	B	警備役らしさは出るが専用感が弱い。中盤までに差し替えたい。
+cutter	切断機	cutter.png	既存流用	既存キャラ流用	要改善	OK(流用)	OK(流用)	OK(流用)	B	大型近接感は出るが切断機らしさが弱い。武器先端の差別化が必要。
+suctionUnit	吸引機	suction_unit.png	専用画像あり	assets/enemies/suction_unit.png	OK	OK	OK	OK	-	専用画像あり。表示規格OK。
+grinder	研磨機	grinder.png	専用画像あり	assets/enemies/grinder.png	OK	OK	OK	OK	-	専用画像あり。v21.4.1で透過と足元を調整済み。
+welder	溶接機	welder.png	専用画像あり	assets/enemies/welder.png	OK	OK	OK	OK	-	専用画像あり。表示規格OK。
+compressor	圧縮機	compressor.png	既存流用	既存キャラ流用	要改善	OK(流用)	OK(流用)	OK(流用)	B	鈍重機械の雰囲気はあるが圧縮機の個性が読み取りにくい。
+boomCell	自爆セル	boomcell.png	専用画像あり	assets/enemies/boomcell.png	OK	OK	OK	OK	-	専用画像あり。表示規格OK。
+repairBit	修復ビット	repairbit.png	専用画像あり	assets/enemies/repairbit.png	OK	OK	OK	OK	-	専用画像あり。表示規格OK。
+supplyPod	補給ポッド	supply_pod.png	専用画像あり	assets/enemies/supply_pod.png	OK	OK	OK	OK	-	専用画像あり。表示規格OK。
+carrier	搬送機	carrier.png	既存流用	既存キャラ流用	要改善	OK(流用)	OK(流用)	OK(流用)	B	搬送機の役割が見た目から読みにくい。コンテナ/アーム表現が欲しい。
+dumper	投棄機	dumper.png	専用画像あり	assets/enemies/dumper.png	OK	OK	OK	OK	-	専用画像あり。表示規格OK。
+shieldDeployer	展開シールド	shield_deployer.png	専用画像あり	assets/enemies/shield_deployer.png	OK	OK	OK	OK	-	専用画像あり。表示規格OK。
+alarmBeacon	警報ビーコン	alarm_beacon.png	専用画像あり	assets/enemies/alarm_beacon.png	OK	OK	OK	OK	-	専用画像あり。現在の画風の基準に使える。
+drillRig	掘削機	drill_rig.png	専用画像あり	assets/enemies/drill_rig.png	OK	OK	OK	OK	-	専用画像あり。表示規格OK。
+scoutEye	索敵アイ	scout_eye.png	専用画像あり	assets/enemies/scout_eye.png	OK	OK	OK	OK	-	v22.0.0で専用画像を追加。表示規格OK。
+magnetUnit	磁力機	magnet_unit.png	専用画像あり	assets/enemies/magnet_unit.png	OK	OK	OK	OK	-	専用画像あり。v21.9.0で追加。 v21.9.1で再確認し問題なし。
+mistSprayer	毒霧散布機	mist_sprayer.png	専用画像あり	assets/enemies/mist_sprayer.png	OK	OK	OK	OK	-	専用画像あり。v21.9.0で追加。 v21.9.1で再確認し問題なし。
+cooler	冷却機	cooler.png	専用画像あり	assets/enemies/cooler.png	OK	OK	OK	OK	-	専用画像あり。v21.9.0で追加。 v21.9.1で再確認し問題なし。
+camouflageUnit	光学迷彩機	camouflage_unit.png	専用画像あり	assets/enemies/camouflage_unit.png	OK	OK	OK	OK	-	v22.0.0で専用画像を追加。表示規格OK。
+splitterBit	分裂ビット	splitter_bit.png	専用画像あり	assets/enemies/splitter_bit.png	OK	OK	OK	OK	-	v22.0.0で専用画像を追加。表示規格OK。
+sniperTurret	狙撃砲台	sniper_turret.png	専用画像あり	assets/enemies/sniper_turret.png	OK	OK	OK	OK	-	専用画像あり。表示規格OK。
+dismantler	解体重機	dismantler.png	既存流用	既存キャラ流用	要改善	OK(流用)	OK(流用)	OK(流用)	A	強敵感は出るが固有ボス格としてはまだ弱い。大型専用化候補。
+coreDefender	中枢防衛機	core_defender.png	専用画像あり	assets/enemies/core_defender.png	OK	OK	OK	OK	-	v22.1.0で専用画像を追加。終盤防衛機として存在感を強化。
+warden	廃棄層の番人	warden.png	専用画像あり	assets/enemies/warden.png	OK	OK	OK	OK	-	v22.1.0で専用画像を追加。ボスとしての威圧感を強化。

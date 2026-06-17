@@ -3,18 +3,18 @@
 // ============================================================
 "use strict";
 const CONFIG = {
-  VERSION: "v21.5.0",
+  VERSION: "v22.8.1",
   TILE: 32,            // 論理タイルサイズ(px)
   SPRITE: 16,          // ドット絵の解像度
   MAX_FLOOR: 30,       // 最深部
   INV_MAX: 12,
-  STEP_MS: 125,        // 1歩のアニメ時間
-  ATTACK_MS: 130,
+  STEP_MS: 138,        // 1歩のアニメ時間
+  ATTACK_MS: 145,
   HUNGER_MAX: 100,
   HUNGER_TURNS: 8,     // 何ターンで満腹度1減るか
   REGEN_TURNS: 4,      // 何ターンでHP1回復するか(満腹時)
-  SAVE_KEY: "hakkutsuka_v18_save",
-  RECORD_KEY: "hakkutsuka_v18_record",
+  SAVE_KEY: "hakkutsuka_v2281_save",
+  RECORD_KEY: "hakkutsuka_v2281_record",
 };
 
 // タイル種別
@@ -107,7 +107,7 @@ function itemTableFor(floor){
 }
 
 // ------------------------------------------------------------
-// 敵定義(v21.5.0)
+// 敵定義(v22.7.1)
 //   25体の軸敵 + 30F固定ラスボス。
 //   今回は「名前・出現階層・役割・画像枠」の整備が目的。
 //   ai は既存ロジックへ寄せる: melee / ranged / slow / kamikaze / healer / phantom / fast / boss
@@ -148,7 +148,7 @@ const ENEMIES = {
   warden:        { name:"廃棄層の番人", hp:150, atk:28, def:10, exp:0, ai:"boss", range:6, role:"最深部固定ボス", floors:[30,30], body:"warden", hue:"#ffd24a" },
 };
 
-// 30階出現テーブル(v21.5.0)
+// 30階出現テーブル(v22.7.1)
 // 通常枠=10、支援/低頻度=5、危険/レア=3 を目安にした明示テーブル。
 const ENEMY_FLOOR_TABLE = {
   1:  [["cleaner",10]],
@@ -170,24 +170,30 @@ const ENEMY_FLOOR_TABLE = {
   17: [["camouflageUnit",10],["splitterBit",10],["magnetUnit",10],["repairBit",5],["cooler",3]],
   18: [["guardDrone",10],["splitterBit",10],["sniperTurret",10],["shieldDeployer",5],["camouflageUnit",3]],
   19: [["sniperTurret",10],["camouflageUnit",10],["splitterBit",10],["repairBit",5],["supplyPod",5],["mistSprayer",3]],
-  20: [["drillRig",10],["sniperTurret",10],["dismantler",10],["shieldDeployer",5],["boomCell",3]],
-  21: [["dismantler",10],["mistSprayer",10],["alarmBeacon",10],["repairBit",5],["shieldDeployer",5],["camouflageUnit",3]],
-  22: [["dismantler",10],["drillRig",10],["magnetUnit",10],["supplyPod",5],["scoutEye",5],["sniperTurret",3]],
-  23: [["drillRig",10],["cooler",10],["splitterBit",10],["repairBit",5],["dismantler",3]],
-  24: [["scoutEye",10],["camouflageUnit",10],["sniperTurret",10],["shieldDeployer",5],["magnetUnit",3]],
-  25: [["mistSprayer",10],["cooler",10],["dismantler",10],["repairBit",5],["supplyPod",5],["coreDefender",3]],
-  26: [["camouflageUnit",10],["splitterBit",10],["sniperTurret",10],["scoutEye",5],["shieldDeployer",5],["dismantler",3]],
-  27: [["splitterBit",10],["magnetUnit",10],["cooler",10],["repairBit",5],["coreDefender",3]],
-  28: [["sniperTurret",10],["dismantler",10],["alarmBeacon",10],["shieldDeployer",5],["supplyPod",5],["camouflageUnit",3]],
-  29: [["dismantler",10],["coreDefender",10],["splitterBit",10],["repairBit",5],["scoutEye",5],["sniperTurret",3]],
-  30: [["coreDefender",10],["dismantler",10],["sniperTurret",10],["repairBit",5],["shieldDeployer",5],["splitterBit",3]],
+  20: [["drillRig",8],["sniperTurret",7],["dismantler",6],["shieldDeployer",5],["boomCell",4],["repairBit",4],["cooler",4]],
+  21: [["dismantler",6],["mistSprayer",7],["alarmBeacon",6],["repairBit",6],["shieldDeployer",5],["camouflageUnit",4],["carrier",4]],
+  22: [["dismantler",6],["drillRig",7],["magnetUnit",7],["supplyPod",6],["scoutEye",6],["sniperTurret",3],["repairBit",4]],
+  23: [["drillRig",7],["cooler",7],["splitterBit",7],["repairBit",6],["dismantler",3],["mistSprayer",4],["shieldDeployer",4]],
+  24: [["scoutEye",7],["camouflageUnit",7],["sniperTurret",6],["shieldDeployer",5],["magnetUnit",5],["repairBit",4],["supplyPod",4]],
+  25: [["mistSprayer",7],["cooler",7],["dismantler",6],["repairBit",6],["supplyPod",6],["coreDefender",2],["shieldDeployer",4]],
+  26: [["camouflageUnit",7],["splitterBit",7],["sniperTurret",6],["scoutEye",6],["shieldDeployer",5],["dismantler",3],["repairBit",4]],
+  27: [["splitterBit",7],["magnetUnit",7],["cooler",7],["repairBit",6],["coreDefender",2],["supplyPod",5],["mistSprayer",4]],
+  28: [["sniperTurret",6],["dismantler",6],["alarmBeacon",6],["shieldDeployer",5],["supplyPod",6],["camouflageUnit",4],["repairBit",4],["cooler",4]],
+  29: [["dismantler",6],["coreDefender",4],["splitterBit",7],["repairBit",6],["scoutEye",6],["sniperTurret",3],["shieldDeployer",4],["mistSprayer",4]],
+  30: [["coreDefender",8],["dismantler",8],["sniperTurret",8],["repairBit",6],["shieldDeployer",6],["splitterBit",4],["cooler",4]],
 };
 
 function enemyTableFor(floor){
   return ENEMY_FLOOR_TABLE[floor] || [["cleaner",10]];
 }
 // 階層が深いほど敵が強くなる係数
-function enemyScale(floor){ return 1 + Math.max(0, floor - 1) * 0.035; }
+function enemyScale(floor){
+  const f = Math.max(0, floor - 1);
+  const early = Math.min(f, 9) * 0.032;
+  const mid = Math.min(Math.max(f - 9, 0), 10) * 0.026;
+  const late = Math.max(f - 19, 0) * 0.018;
+  return 1 + early + mid + late;
+}
 
 function weightedPick(table){
   let sum = 0;
@@ -210,7 +216,10 @@ const TRAPS = {
 
 // 目的表示
 function objectiveFor(state){
-  if (state.mode === "village") return "▶ 東の隔壁から廃棄層へ";
+  if (state.mode === "village"){
+    const talked = !!(state.flags && state.flags.talked && state.flags.talked.elder);
+    return talked ? "▶ 東の隔壁から廃棄層へ" : "▶ 中央広場の長老ガジュに話しかける";
+  }
   if (state.hasCore) return "▶ アクアコアを集落へ持ち帰れ";
   if (state.floor >= CONFIG.MAX_FLOOR) return "▶ アクアコアを探せ";
   return `▶ 降下リフトを探せ (B${CONFIG.MAX_FLOOR}Fを目指す)`;

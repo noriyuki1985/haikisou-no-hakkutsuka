@@ -1,8 +1,36 @@
 // ============================================================
 // ゲーム本体: 状態管理 / ターン制 / 戦闘 / 描画ループ
 // ============================================================
+
 "use strict";
+
+const ENEMY_RENDER_TUNE = {
+  scoutEye:       { scale: 0.98, yOffset: -0.03 },
+  camouflageUnit: { scale: 1.04, yOffset: -0.02 },
+  splitterBit:    { scale: 0.94, yOffset: -0.01 },
+  coreDefender:   { scale: 1.12, yOffset: -0.05 },
+  warden:         { scale: 1.08, yOffset: -0.06 },
+};
+
+const PLAYER_STATUS_COLORS = {
+  poison: "#9de768",
+  slow: "#8fd0ff",
+  magnet: "#ffd24a",
+};
+
+const SPECIAL_ENEMY_SAFETY = {
+  maxEnemies: 28,
+  maxSplitterBits: 6,
+  scoutCooldown: 4,
+  camouflageCooldown: 6,
+  splitterCooldown: 8,
+  mistCooldown: 4,
+  coolerCooldown: 5,
+  magnetCooldown: 5,
+};
+
 const GAME = {
+
   st: null,
   canvas: null, ctx: null,
   zoom: 2,              // タイル描画倍率(16px x zoom)
@@ -90,8 +118,28 @@ const GAME = {
     document.getElementById("m-help").onclick = async () => {
       document.getElementById("menu-modal").classList.add("hidden");
       await UI.dialog(
-        "【操作】\n行きたい方向をタップ=1歩\n長押し=連続移動 / 2回タップ=ダッシュ\n敵の方向をタップ=攻撃\n自分をタップ or「足元」=階段・拾う\n\n【ルール】\n自分が動くと敵も動く。\n満腹度が尽きるとHPが減っていく。\n倒れると道具を全て失い、レベルも1に戻る。\n帰還タグは命綱。最後の1枚は大事に。",
+        `【操作】
+行きたい方向をタップ=1歩
+長押し=連続移動 / 2回タップ=ダッシュ
+敵の方向をタップ=攻撃
+自分をタップ or「足元」=階段・拾う
+
+【ルール】
+自分が動くと敵も動く。
+満腹度が尽きるとHPが減っていく。
+倒れると道具を全て失い、レベルも1に戻る。
+帰還タグは命綱。最後の1枚は大事に。
+
+【状態】
+毒=ターンごとにHP減少
+鈍足=ダッシュ不可
+磁力干渉=装備性能が一時低下`,
         ["閉じる"]);
+    };
+    const enemyBookBtn = document.getElementById("m-enemybook");
+    if (enemyBookBtn) enemyBookBtn.onclick = async () => {
+      document.getElementById("menu-modal").classList.add("hidden");
+      await this._showEnemyBook();
     };
     document.getElementById("m-record").onclick = async () => {
       document.getElementById("menu-modal").classList.add("hidden");
@@ -146,12 +194,23 @@ const GAME = {
       player: this._newPlayer(),
       village: getVillage(),
       dungeon: null, visible: null,
+      flags: this._defaultFlags(),
     };
     const v = this.st.village;
     this.st.player.x = v.start[0]; this.st.player.y = v.start[1];
     this.st.player.anim = { fx: v.start[0], fy: v.start[1] };
     document.getElementById("title-screen").classList.add("hidden");
     this._showIntro();
+  },
+  _defaultFlags(src){
+    const talked = Object.assign({ elder:false, mechanic:false, keeper:false, child:false, sorter:false }, src && src.talked ? src.talked : {});
+    return {
+      villageGuideSeen: !!(src && src.villageGuideSeen),
+      talked,
+    };
+  },
+  _sanitizeFlags(flags){
+    return this._defaultFlags(flags);
   },
   _newPlayer(){
     return {
@@ -170,6 +229,7 @@ const GAME = {
       v: CONFIG.VERSION, cleared: this.st.cleared,
       player: { lv:p.lv, exp:p.exp, hp:p.hp, maxHp:p.maxHp,
                 inv:p.inv, weapon:p.weapon, armor:p.armor },
+      flags: this._sanitizeFlags(this.st.flags),
     };
     try { localStorage.setItem(CONFIG.SAVE_KEY, JSON.stringify(data)); } catch(e){}
   },
@@ -184,8 +244,12 @@ const GAME = {
       player: this._newPlayer(),
       village: getVillage(),
       dungeon: null, visible: null,
+      flags: this._defaultFlags(data.flags),
     };
     Object.assign(this.st.player, data.player);
+    this.st.player.poisonTurns = this.st.player.poisonTurns || 0;
+    this.st.player.slowTurns = this.st.player.slowTurns || 0;
+    this.st.player.magnetizedTurns = this.st.player.magnetizedTurns || 0;
     document.getElementById("title-screen").classList.add("hidden");
     this.enterVillage(true);
   },
@@ -230,6 +294,7 @@ const GAME = {
     st.player.hp = st.player.maxHp;
     st.player.belly = CONFIG.HUNGER_MAX;
     st.player.buffAtk = 0; st.player.buffDef = 0; st.player.stun = 0;
+    st.player.poisonTurns = 0; st.player.slowTurns = 0; st.player.magnetizedTurns = 0;
     this.camera.init = false;
     this.effects = [];
     document.getElementById("game-screen").classList.remove("hidden");
@@ -239,9 +304,31 @@ const GAME = {
     UI.drawMinimap(st);
     UI.banner("集 落", "SETTLEMENT");
     AUDIO.playBgm("village");
-    if (first) UI.log("東の隔壁の先が、廃棄層だ。", "sys");
+    if (first) this._showVillageGuide();
+    else if (st.flags && st.flags.talked && st.flags.talked.elder) UI.log("東の隔壁の先が、廃棄層だ。", "sys");
     this.saveGame();
     this._refreshTitle();
+  },
+
+  _showVillageGuide(){
+    const st = this.st;
+    if (!st.flags) st.flags = this._defaultFlags();
+    if (!st.flags.talked.elder){
+      if (!st.flags.villageGuideSeen){
+        UI.log("▼ が出た村人にぶつかると会話できる。", "sys");
+        UI.log("まずは中央広場の長老ガジュに話しかけよう。", "sys");
+      } else {
+        UI.log("まずは中央広場の長老ガジュに話しかけよう。", "sys");
+      }
+    } else {
+      UI.log("東の隔壁の先が、廃棄層だ。", "sys");
+    }
+    st.flags.villageGuideSeen = true;
+  },
+
+  _villageObjectiveNpcId(){
+    const flags = this.st && this.st.flags;
+    return flags && flags.talked && !flags.talked.elder ? "elder" : null;
   },
 
   async _confirmDive(){
@@ -261,7 +348,14 @@ const GAME = {
       lines = ["おお…水だ。本当に水が戻った。\nお前さんは集落の恩人じゃ。",
                "じゃが廃棄層はまだ広い。\nお前さんの腕なら、もっと深くまで行けるじゃろう。"];
     }
-    UI.talk(npc.name, lines);
+    this._activeTalkNpcId = npc.id;
+    UI.talk(npc.name, lines).then(() => {
+      if (!st.flags) st.flags = this._defaultFlags();
+      st.flags.talked[npc.id] = true;
+      this._activeTalkNpcId = null;
+      UI.updateHud(st);
+      this.saveGame();
+    });
   },
   _dirTo(x1,y1,x2,y2){
     const dx = Math.sign(x2-x1), dy = Math.sign(y2-y1);
@@ -282,6 +376,9 @@ const GAME = {
     st.player.anim.fx = st.player.x; st.player.anim.fy = st.player.y;
     this.camera.init = false;
     this.effects = [];
+    st.player.poisonTurns = Math.max(0, st.player.poisonTurns || 0);
+    st.player.slowTurns = Math.max(0, st.player.slowTurns || 0);
+    st.player.magnetizedTurns = Math.max(0, st.player.magnetizedTurns || 0);
     this._computeVisibility();
     UI.updateHud(st);
     UI.drawMinimap(st);
@@ -358,6 +455,11 @@ const GAME = {
   startDash(dir){
     const st = this.st;
     if (st.mode !== "dungeon"){ this.playerStep(dir); return; }
+    if (st.player.slowTurns > 0){
+      UI.log("冷却ダメージで動きが鈍い。ダッシュできない!", "warn");
+      this.playerStep(dir);
+      return;
+    }
     const run = () => {
       if (!this.st || this.over) return;
       if (UI.talking || UI.invOpen) return;
@@ -579,10 +681,12 @@ const GAME = {
   playerAttack(enemy){
     const st = this.st, p = st.player;
     p.lunge = { dir: p.dir, t0: performance.now() };
+    this._addMeleeArc(p.x, p.y, enemy.x, enemy.y, "#fff6d8", true);
     AUDIO.sfx("swing");
     if (RNG.chance(.08)){
       UI.log("攻撃をはずした!");
       AUDIO.sfx("miss");
+      this._addMeleeArc(p.x, p.y, enemy.x, enemy.y, "#857f72", false);
       this._addPop(enemy.x, enemy.y, "miss", "#857f72");
       this._endPlayerTurn(CONFIG.ATTACK_MS);
       return;
@@ -592,6 +696,7 @@ const GAME = {
     enemy.hp -= dmg;
     enemy.awake = true;
     this._addFlash(enemy);
+    this._addHitImpact(enemy.x, enemy.y, "#fff6d8");
     this._addPop(enemy.x, enemy.y, dmg, "#fff6d8");
     if (enemy.hp <= 0){
       this._killEnemy(enemy, true);
@@ -607,6 +712,7 @@ const GAME = {
     const w = p.inv.find(i => i.uid === p.weapon);
     if (w) atk += ITEMS[w.id].atk + (w.plus || 0);
     if (p.buffAtk > 0) atk = Math.round(atk * 1.5);
+    if (p.magnetizedTurns > 0) atk = Math.max(1, atk - 2);
     return atk;
   },
   _playerDef(){
@@ -614,6 +720,7 @@ const GAME = {
     let def = 0;
     const a = p.inv.find(i => i.uid === p.armor);
     if (a) def += ITEMS[a.id].def + (a.plus || 0);
+    if (p.magnetizedTurns > 0) def = Math.max(0, def - 1);
     return def;
   },
   _calcDamage(atk, def){
@@ -659,7 +766,9 @@ const GAME = {
     const st = this.st, p = st.player;
     if (p.buffDef > 0) dmg = Math.max(1, Math.round(dmg / 2));
     p.hp -= dmg;
+    p.hurtAt = performance.now();
     AUDIO.sfx("hurt");
+    this._addHitImpact(p.x, p.y, "#ff9d8a");
     this._addPop(p.x, p.y, dmg, "#ff9d8a");
     this._shake = performance.now();
     UI.updateHud(st);
@@ -689,6 +798,20 @@ const GAME = {
     const st = this.st, p = st.player;
     if (st.mode !== "dungeon") return;
     if (p.stun > 0) p.stun--;
+    if (p.poisonTurns > 0){
+      p.poisonTurns--;
+      if (this._damagePlayer(1, "毒霧")) return;
+      this._addPop(p.x, p.y - 0.28, "毒", PLAYER_STATUS_COLORS.poison);
+      if (p.poisonTurns === 0) UI.log("毒霧の侵食が止まった。", "sys");
+    }
+    if (p.slowTurns > 0){
+      p.slowTurns--;
+      if (p.slowTurns === 0) UI.log("冷気の鈍りが解けた。", "sys");
+    }
+    if (p.magnetizedTurns > 0){
+      p.magnetizedTurns--;
+      if (p.magnetizedTurns === 0) UI.log("磁力干渉が収まり、装備が元に戻った。", "sys");
+    }
     if (p.buffAtk > 0){ p.buffAtk--; if (p.buffAtk === 0) UI.log("ブースト剤が切れた。", "sys"); }
     if (p.buffDef > 0){ p.buffDef--; if (p.buffDef === 0) UI.log("硬化剤が切れた。", "sys"); }
     if (st.turn % CONFIG.HUNGER_TURNS === 0 && p.belly > 0){
@@ -712,13 +835,14 @@ const GAME = {
       if (this.over) return;
       if (e.hp <= 0) continue;
       const def = ENEMIES[e.id];
+      if (!def) continue;
       if (e.stun > 0){ e.stun--; continue; }
       if (e.shieldTurns > 0) e.shieldTurns--;
       if (e.buffTurns > 0) e.buffTurns--;
       // 鈍足: 1ターンおき / 倍速: speed回行動
       let acts = 1;
       if (def.ai === "slow"){ e.actGauge ^= 1; if (!e.actGauge) continue; }
-      if (def.speed) acts = def.speed;
+      if (def.speed) acts = Math.min(2, def.speed);
       for (let a = 0; a < acts; a++){
         if (this.over || e.hp <= 0) break;
         this._enemyActOnce(e, def);
@@ -755,6 +879,44 @@ const GAME = {
       if (dist <= 1 && this._canMeleeFrom(e.x, e.y)){ this._enemyMelee(e, def); return; }
       if (sees) this._enemyChase(e);
       else this._enemyWander(e);
+      return;
+    }
+
+    // v22.1.2: 特殊敵は通常AIに落ちる前に、安全化した専用挙動を試す。
+    if (e.id === "scoutEye"){
+      if (this._tryScoutScan(e, def, sees)) return;
+      if (dist <= 1 && this._canMeleeFrom(e.x, e.y)){ this._enemyMelee(e, def); return; }
+      if (sees) this._enemyChase(e); else this._enemyWander(e);
+      return;
+    }
+    if (e.id === "camouflageUnit"){
+      if (this._tryCamouflageWarp(e, def, sees)) return;
+      if (dist <= 1 && this._canMeleeFrom(e.x, e.y)){ this._enemyMelee(e, def); return; }
+      if (sees) this._enemyChase(e); else this._enemyWander(e);
+      return;
+    }
+    if (e.id === "splitterBit"){
+      if (this._trySplitterSpawn(e, def, sees)) return;
+      if (dist <= 1 && this._canMeleeFrom(e.x, e.y)){ this._enemyMelee(e, def); return; }
+      if (sees) this._enemyChase(e); else this._enemyWander(e);
+      return;
+    }
+    if (e.id === "mistSprayer"){
+      if (this._tryMistSpray(e, def, sees)) return;
+      if (dist <= 1 && this._canMeleeFrom(e.x, e.y)){ this._enemyMelee(e, def); return; }
+      if (sees) this._enemyChase(e); else this._enemyWander(e);
+      return;
+    }
+    if (e.id === "cooler"){
+      if (this._tryCoolBlast(e, def, sees)) return;
+      if (dist <= 1 && this._canMeleeFrom(e.x, e.y)){ this._enemyMelee(e, def); return; }
+      if (sees) this._enemyChase(e); else this._enemyWander(e);
+      return;
+    }
+    if (e.id === "magnetUnit"){
+      if (this._tryMagnetPulse(e, def, sees)) return;
+      if (dist <= 1 && this._canMeleeFrom(e.x, e.y)){ this._enemyMelee(e, def); return; }
+      if (sees) this._enemyChase(e); else this._enemyWander(e);
       return;
     }
 
@@ -802,6 +964,7 @@ const GAME = {
         ally.buffTurns = def.buffTurns || 8;
         ally.buffAmt = def.buffAmt || 4;
         this._addPop(ally.x, ally.y, "強化", "#ffd24a");
+        this._addSupplyFx(e.x, e.y, ally.x, ally.y);
         if (st.visible[e.y][e.x]) UI.log(`${def.name}が${ENEMIES[ally.id].name}を補給強化した。`, "warn");
         return;
       }
@@ -817,6 +980,7 @@ const GAME = {
       if (ally){
         ally.shieldTurns = def.shieldTurns || 6;
         this._addPop(ally.x, ally.y, "盾", "#8fd0ff");
+        this._addShieldCastFx(e.x, e.y, ally.x, ally.y);
         if (st.visible[e.y][e.x]) UI.log(`${def.name}が${ENEMIES[ally.id].name}にシールドを展開した。`, "warn");
         return;
       }
@@ -835,11 +999,13 @@ const GAME = {
           const n = this._summonEnemiesNear(e.x, e.y, 2);
           if (n > 0){
             AUDIO.sfx("alarm");
+            this._addAlarmFx(e.x, e.y, true);
             UI.log(`${def.name}が警報を発した! 増援${n}体が起動。`, "warn");
             return;
           }
         } else if (st.visible[e.y][e.x]){
           this._addPop(e.x, e.y, "警報", "#ff5d4d");
+          this._addAlarmFx(e.x, e.y, false);
         }
       }
       if (dist <= 2){ this._enemyFlee(e); return; }
@@ -857,7 +1023,8 @@ const GAME = {
         const dmg = this._calcDamage(this._enemyAtk(e, def), this._playerDef());
         UI.log(`${def.name}が廃材を投げた! ${dmg}のダメージ!`, "dmg");
         this._damagePlayer(dmg, def.name);
-        this._dropScrapNear(p.x, p.y);
+        this._addScrapImpactFx(p.x, p.y);
+        if (this._dropScrapNear(p.x, p.y)) this._addPop(p.x, p.y, "散乱", "#caa25a");
         return;
       }
     }
@@ -871,23 +1038,11 @@ const GAME = {
       return;
     }
 
-    // 光学迷彩機: 4ターンごとにプレイヤー近くへ転移
+    // 光学迷彩系の保険。専用処理に入らなかった場合は通常追跡に落とす。
     if (def.ai === "phantom"){
-      e.actGauge = (e.actGauge + 1) % 4;
-      if (e.actGauge === 0 && sees && dist > 1){
-        const spots = [];
-        for (const k in DIRS){
-          const [dx,dy] = DIRS[k];
-          const x = p.x+dx, y = p.y+dy;
-          if (this._walkable(x,y) && !d.enemies.some(o=>o.x===x&&o.y===y)) spots.push([x,y]);
-        }
-        if (spots.length){
-          const [x,y] = RNG.pick(spots);
-          e.x = x; e.y = y; e.anim.fx = x; e.anim.fy = y;
-          if (st.visible[y] && st.visible[y][x]){ UI.log(`${def.name}が眼前に滲み出た!`, "warn"); AUDIO.sfx("warp"); }
-          return;
-        }
-      }
+      if (sees) this._enemyChase(e);
+      else this._enemyWander(e);
+      return;
     }
 
     // 遠距離(警備ドローン / 狙撃砲台 / 中枢防衛機 / 番人)
@@ -987,7 +1142,180 @@ const GAME = {
     return true;
   },
 
-  _findRepairTarget(e, range){
+
+_findOpenCellsAround(x, y, minDist){
+  const d = this.st.dungeon;
+  const cells = [];
+  for (const k in DIRS){
+    const [dx, dy] = DIRS[k];
+    const xx = x + dx, yy = y + dy;
+    if (!this._walkable(xx, yy)) continue;
+    if (d.enemies.some(o => o.x === xx && o.y === yy)) continue;
+    if (xx === this.st.player.x && yy === this.st.player.y) continue;
+    if (minDist != null && dist8(xx, yy, x, y) < minDist) continue;
+    cells.push([xx, yy]);
+  }
+  return cells;
+},
+
+_addScoutScanFx(x, y, found){
+  this.effects.push({ type:"scanPulse", x, y, found:!!found, t0:performance.now(), dur: found ? 540 : 420 });
+},
+_addAppearFx(x, y){
+  this.effects.push({ type:"appearPulse", x, y, t0:performance.now(), dur:360 });
+},
+_addSplitFx(x, y){
+  this.effects.push({ type:"splitPulse", x, y, t0:performance.now(), dur:420 });
+},
+_addMistFx(x, y){
+  this.effects.push({ type:"mistCloud", x, y, t0:performance.now(), dur:560 });
+},
+_addColdFx(x, y){
+  this.effects.push({ type:"coldPulse", x, y, t0:performance.now(), dur:520 });
+},
+_addMagnetFx(x1, y1, x2, y2){
+  this.effects.push({ type:"magnetBeam", x1, y1, x2, y2, t0:performance.now(), dur:260 });
+  this.effects.push({ type:"magnetPulse", x:x2, y:y2, t0:performance.now(), dur:460 });
+},
+
+_tryScoutScan(e, def, sees){
+  if (!sees) return false;
+  e.scanCd = Math.max(0, e.scanCd || 0);
+  if (e.scanCd > 0){ e.scanCd--; return false; }
+  const p = this.st.player;
+  const found = dist8(e.x, e.y, p.x, p.y) <= 7;
+  this._addScoutScanFx(e.x, e.y, found);
+  e.scanCd = SPECIAL_ENEMY_SAFETY.scoutCooldown;
+  if (!found) return false;
+  let woke = 0;
+  for (const ally of this.st.dungeon.enemies){
+    if (ally === e) continue;
+    if (dist8(ally.x, ally.y, e.x, e.y) <= 5){
+      ally.awake = true;
+      if (ally.buffTurns < 1){ ally.buffTurns = 1; ally.buffAmt = Math.max(ally.buffAmt || 0, 1); }
+      woke++;
+    }
+  }
+  this._addPop(e.x, e.y - 0.3, "索敵", "#3ddad7");
+  if (woke > 0) UI.log(`${def.name}が索敵波を放ち、周囲の機械を起こした。`, "warn");
+  return true;
+},
+
+_tryCamouflageWarp(e, def, sees){
+  if (!sees) return false;
+  e.camoCd = Math.max(0, e.camoCd || 0);
+  if (e.camoCd > 0){ e.camoCd--; return false; }
+  const p = this.st.player;
+  const d0 = dist8(e.x, e.y, p.x, p.y);
+  if (d0 < 4 || d0 > 8 || !RNG.chance(0.35)) return false;
+  const spots = [];
+  for (let yy = p.y - 2; yy <= p.y + 2; yy++) for (let xx = p.x - 2; xx <= p.x + 2; xx++){
+    if (dist8(xx, yy, p.x, p.y) !== 2) continue;
+    if (!this._walkable(xx, yy)) continue;
+    if (this.st.dungeon.enemies.some(o => o !== e && o.x === xx && o.y === yy)) continue;
+    spots.push([xx, yy]);
+  }
+  if (!spots.length) return false;
+  const [x, y] = RNG.pick(spots);
+  e.x = x; e.y = y; e.anim.fx = x; e.anim.fy = y; e.awake = true;
+  e.camoCd = SPECIAL_ENEMY_SAFETY.camouflageCooldown;
+  this._addAppearFx(x, y);
+  this._addPop(x, y - 0.25, "出現", "#c08bff");
+  UI.log(`${def.name}が距離を詰めて出現した。`, "warn");
+  AUDIO.sfx("warp");
+  return true;
+},
+
+_trySplitterSpawn(e, def, sees){
+  if (!sees) return false;
+  e.splitCd = Math.max(0, e.splitCd || 0);
+  if (e.splitCd > 0){ e.splitCd--; return false; }
+  if (e.splitDone || e.splitChild) return false;
+  const d = this.st.dungeon;
+  const splitters = d.enemies.filter(o => o.id === "splitterBit").length;
+  if (splitters >= SPECIAL_ENEMY_SAFETY.maxSplitterBits || d.enemies.length >= SPECIAL_ENEMY_SAFETY.maxEnemies) return false;
+  if (e.hp > Math.max(2, Math.floor(e.maxHp * 0.55)) && !RNG.chance(0.18)) return false;
+  const cells = this._findOpenCellsAround(e.x, e.y);
+  if (!cells.length) return false;
+  const [xx, yy] = RNG.pick(cells);
+  const ne = makeEnemy("splitterBit", xx, yy, this.st.floor);
+  ne.hp = Math.max(1, Math.floor(e.hp * 0.45));
+  ne.maxHp = Math.max(ne.hp, Math.floor(ne.maxHp * 0.55));
+  ne.atk = Math.max(1, Math.floor(ne.atk * 0.8));
+  ne.exp = Math.max(1, Math.floor(ne.exp * 0.5));
+  ne.awake = true; ne.splitDone = true; ne.splitChild = true;
+  d.enemies.push(ne);
+  e.splitDone = true; e.splitCd = SPECIAL_ENEMY_SAFETY.splitterCooldown;
+  this._addSplitFx(e.x, e.y); this._addSplitFx(xx, yy);
+  this._addPop(xx, yy - 0.25, "分裂", "#d8d2c4");
+  UI.log(`${def.name}が小型ビットを分離した。`, "warn");
+  return true;
+},
+
+_tryMistSpray(e, def, sees){
+  if (!sees) return false;
+  e.mistCd = Math.max(0, e.mistCd || 0);
+  if (e.mistCd > 0){ e.mistCd--; return false; }
+  const line = this._lineToPlayer(e, Math.max(3, (def.range || 4)));
+  if (!line) return false;
+  e.mistCd = SPECIAL_ENEMY_SAFETY.mistCooldown;
+  this._addProj(e.x, e.y, this.st.player.x, this.st.player.y, "#9de768", fxSprite("pollution"));
+  this._addMistFx(this.st.player.x, this.st.player.y);
+  this.st.player.poisonTurns = Math.max(this.st.player.poisonTurns || 0, 2);
+  this._addPop(this.st.player.x, this.st.player.y - 0.25, "毒", "#9de768");
+  UI.log(`${def.name}の毒霧。数ターンHPが削られる。`, "warn");
+  AUDIO.sfx("zap");
+  this._damagePlayer(Math.max(1, Math.round(this._enemyAtk(e, def) * 0.25)), def.name);
+  return true;
+},
+
+_tryCoolBlast(e, def, sees){
+  if (!sees) return false;
+  e.coolCd = Math.max(0, e.coolCd || 0);
+  if (e.coolCd > 0){ e.coolCd--; return false; }
+  const line = this._lineToPlayer(e, Math.max(4, (def.range || 5)));
+  if (!line) return false;
+  e.coolCd = SPECIAL_ENEMY_SAFETY.coolerCooldown;
+  this._addProj(e.x, e.y, this.st.player.x, this.st.player.y, "#8fd0ff", fxSprite("laser"));
+  this._addColdFx(this.st.player.x, this.st.player.y);
+  this.st.player.slowTurns = Math.max(this.st.player.slowTurns || 0, 2);
+  this._addPop(this.st.player.x, this.st.player.y - 0.25, "鈍足", "#8fd0ff");
+  UI.log(`${def.name}の冷気。しばらくダッシュできない。`, "warn");
+  AUDIO.sfx("zap");
+  this._damagePlayer(Math.max(1, Math.round(this._enemyAtk(e, def) * 0.20)), def.name);
+  return true;
+},
+
+_tryMagnetPull(e){
+  const st = this.st, p = st.player;
+  const dx = Math.sign(e.x - p.x), dy = Math.sign(e.y - p.y);
+  const nx = p.x + dx, ny = p.y + dy;
+  if (!this._walkable(nx, ny)) return false;
+  if (st.dungeon.enemies.some(o => o.x === nx && o.y === ny)) return false;
+  p.x = nx; p.y = ny; p.anim.fx = nx; p.anim.fy = ny;
+  this._afterPlayerMove();
+  return true;
+},
+
+_tryMagnetPulse(e, def, sees){
+  if (!sees) return false;
+  e.magnetCd = Math.max(0, e.magnetCd || 0);
+  if (e.magnetCd > 0){ e.magnetCd--; return false; }
+  const p = this.st.player;
+  const line = this._lineToPlayer(e, Math.max(4, def.range || 4));
+  if (!line) return false;
+  e.magnetCd = SPECIAL_ENEMY_SAFETY.magnetCooldown;
+  this._tryMagnetPull(e);
+  this._addMagnetFx(e.x, e.y, p.x, p.y);
+  p.magnetizedTurns = Math.max(p.magnetizedTurns || 0, 2);
+  this._addPop(p.x, p.y - 0.25, "磁力", "#ffd24a");
+  UI.log(`${def.name}の磁力干渉。装備性能が一時低下する。`, "warn");
+  AUDIO.sfx("zap");
+  return true;
+},
+
+_findRepairTarget(e, range){
+
     return this.st.dungeon.enemies
       .filter(o => o !== e && o.hp < o.maxHp && dist8(o.x,o.y,e.x,e.y) <= range)
       .sort((a,b)=>(a.hp/a.maxHp)-(b.hp/b.maxHp))[0] || null;
@@ -1008,6 +1336,8 @@ const GAME = {
   _summonEnemiesNear(x, y, n){
     const st = this.st, d = st.dungeon;
     const table = enemyTableFor(st.floor).filter(([id]) => id !== "alarmBeacon" && id !== "warden");
+    if (d.enemies.length >= SPECIAL_ENEMY_SAFETY.maxEnemies) return 0;
+    n = Math.min(n, SPECIAL_ENEMY_SAFETY.maxEnemies - d.enemies.length);
     let made = 0;
     const cells = [];
     for (let yy = y - 3; yy <= y + 3; yy++) for (let xx = x - 3; xx <= x + 3; xx++){
@@ -1083,6 +1413,7 @@ const GAME = {
   _enemyMelee(e, def){
     const st = this.st, p = st.player;
     e.lunge = { dir: this._dirTo(e.x, e.y, p.x, p.y), t0: performance.now() };
+    this._addMeleeArc(e.x, e.y, p.x, p.y, "#ff9d8a", true);
     if (RNG.chance(.1)){
       this._addPop(p.x, p.y, "miss", "#857f72");
       AUDIO.sfx("miss");
@@ -1489,6 +1820,43 @@ const GAME = {
     this.saveGame();
   },
 
+  async _showEnemyBook(){
+    const ids = Array.from(this.catalog);
+    if (!ids.length){
+      await UI.dialog("まだ敵データがない。廃棄層で敵を見つけよう。", ["閉じる"]);
+      return;
+    }
+    const rangeLabel = (floors) => floors[0] === floors[1] ? `B${floors[0]}F` : `B${floors[0]}-${floors[1]}F`;
+    const total = Object.keys(ENEMIES).filter(id => id !== "warden").length;
+    const rows = ids.map(id => ENEMIES[id]).filter(Boolean)
+      .sort((a, b) => (a.floors[0] - b.floors[0]) || a.name.localeCompare(b.name, "ja"))
+      .map(def => `[${rangeLabel(def.floors)}] ${def.name}: ${def.role}`);
+    const text = [
+      `【敵図鑑】 発見済み ${rows.length}/${total}種`,
+      "凡例: 毒=毎ターン1ダメージ / 鈍足=ダッシュ不可 / 磁力=攻防低下",
+      "",
+      ...rows,
+    ].join("\n");
+    await UI.dialog(text, ["閉じる"]);
+  },
+
+  _enemyBookHint(id, def){
+    const hints = {
+      scoutEye:"索敵波で周囲の敵を起こす",
+      camouflageUnit:"半透明で接近し、離れていると出現奇襲",
+      splitterBit:"弱ると一度だけ分裂",
+      mistSprayer:"毒霧で継続ダメージ",
+      cooler:"冷気で鈍足にする",
+      magnetUnit:"引き寄せと装備干渉",
+      alarmBeacon:"警報で増援",
+      shieldDeployer:"シールド付与",
+      supplyPod:"敵を強化",
+      repairBit:"敵を修復",
+      boomCell:"接近後に自爆"
+    };
+    return hints[id] || def.role || "通常敵";
+  },
+
   // ---------------------------------------------------------
   // 視界
   // ---------------------------------------------------------
@@ -1523,6 +1891,12 @@ const GAME = {
   _addFlash(enemy){
     this.effects.push({ type:"flash", target:enemy, t0:performance.now(), dur:140 });
   },
+  _addMeleeArc(x1, y1, x2, y2, color, strong){
+    this.effects.push({ type:"meleeArc", x1, y1, x2, y2, color, strong:!!strong, t0:performance.now(), dur: strong ? 210 : 160 });
+  },
+  _addHitImpact(x, y, color){
+    this.effects.push({ type:"hitImpact", x, y, color, t0:performance.now(), dur:220 });
+  },
   _addBurst(x, y, hue){
     const parts = [];
     for (let i = 0; i < 10; i++){
@@ -1536,6 +1910,32 @@ const GAME = {
   },
   _addProj(x1, y1, x2, y2, color, sprite){
     this.effects.push({ type:"proj", x1, y1, x2, y2, color, sprite, t0:performance.now(), dur:150 });
+  },
+  _addHealFx(x1, y1, x2, y2){
+    const t0 = performance.now();
+    this.effects.push({ type:"healLink", x1, y1, x2, y2, t0, dur:220 });
+    this.effects.push({ type:"healPulse", x:x2, y:y2, t0, dur:420 });
+  },
+  _addAlarmFx(x, y, strong){
+    this.effects.push({ type:"alarmPulse", x, y, strong:!!strong, t0:performance.now(), dur: strong ? 520 : 360 });
+  },
+  _addSupplyFx(x1, y1, x2, y2){
+    const t0 = performance.now();
+    this.effects.push({ type:"supplyLink", x1, y1, x2, y2, t0, dur:260 });
+    this.effects.push({ type:"supplyPulse", x:x2, y:y2, t0, dur:460 });
+  },
+  _addShieldCastFx(x1, y1, x2, y2){
+    const t0 = performance.now();
+    this.effects.push({ type:"shieldLink", x1, y1, x2, y2, t0, dur:260 });
+    this.effects.push({ type:"shieldPulse", x:x2, y:y2, t0, dur:520 });
+  },
+  _addScrapImpactFx(x, y){
+    const parts = [];
+    for (let i = 0; i < 12; i++){
+      const a = RNG.next() * Math.PI * 2, sp = 0.5 + RNG.next() * 1.6;
+      parts.push({ a, sp, r: 1 + RNG.next() * 2.2, w: 3 + RNG.next() * 5 });
+    }
+    this.effects.push({ type:"scrapImpact", x, y, parts, t0:performance.now(), dur:420 });
   },
 
   // ---------------------------------------------------------
@@ -1673,26 +2073,22 @@ const GAME = {
     const dx = footX - drawW/2 + lx;
     const dy = footY - drawH + ly - bob;
     if (portrait){
-      // 左向き(dir==4)は反転
+      // 左向き(dir==4)は足元基準で安定して反転
       const flip = (opts.dir === 4);
       ctx.save();
       if (opts.dead){ ctx.globalAlpha = 0.85; }
       if (flip){
-        ctx.translate(footX*2 + lx*2, 0);
+        const pivotX = footX + lx;
+        ctx.translate(pivotX, 0);
         ctx.scale(-1, 1);
-        ctx.drawImage(portrait, footX - drawW/2 - lx, dy, drawW, drawH);
-      } else {
-        ctx.drawImage(portrait, dx, dy, drawW, drawH);
+        ctx.translate(-pivotX, 0);
       }
+      ctx.drawImage(portrait, dx, dy, drawW, drawH);
       // 被弾フラッシュ(加算で白く)
       if (opts.flash > 0){
         ctx.globalCompositeOperation = "lighter";
         ctx.globalAlpha = opts.flash * 0.8;
-        if (flip){
-          ctx.drawImage(portrait, footX - drawW/2 - lx, dy, drawW, drawH);
-        } else {
-          ctx.drawImage(portrait, dx, dy, drawW, drawH);
-        }
+        ctx.drawImage(portrait, dx, dy, drawW, drawH);
         ctx.globalCompositeOperation = "source-over";
       }
       ctx.restore();
@@ -1707,28 +2103,55 @@ const GAME = {
   _drawPlayer(ctx, tp, now){
     const st = this.st, p = st.player;
     const moving = Math.abs(p.x - p.anim.fx) > .03 || Math.abs(p.y - p.anim.fy) > .03;
-    // バウンド: 移動中は速い、停止中はゆっくり呼吸
+    // バウンド: 移動中は歩幅をはっきり、停止中は呼吸を控えめに
     const bob = moving
-      ? Math.abs(Math.sin(now / 90)) * tp * 0.12
-      : Math.sin(now / 650) * tp * 0.02 + tp*0.02;
+      ? Math.abs(Math.sin(now / 84)) * tp * 0.10
+      : Math.sin(now / 700) * tp * 0.016 + tp*0.018;
     let lungeT = null, lungeDir = null;
     if (p.lunge){
       lungeT = (now - p.lunge.t0) / CONFIG.ATTACK_MS;
       lungeDir = p.lunge.dir;
       if (lungeT >= 1) p.lunge = null;
     }
-    const portrait = playerPortrait(st.mode);
+    const hurtFlash = p.hurtAt ? Math.max(0, 1 - ((now - p.hurtAt) / 220)) : 0;
+    let animState = moving ? "walk" : "idle";
+    if (UI.talking && st.mode === "village") animState = (Math.floor((UI.talkPhase || now) / 900) % 3 === 2) ? "talk" : "idle";
+    if (lungeT != null && lungeT < 1) animState = "attack";
+    if (hurtFlash > 0.01) animState = "hurt";
+    const portrait = playerPortrait(st.mode, p.dir, animState, now);
     const fb = SPR.player[this._dirKey(p.dir)][moving ? (Math.floor(now/120)%2) : 0];
     let alpha = 1;
     if (p.stun > 0) alpha = 0.7 + 0.3 * Math.sin(now/60);
     ctx.globalAlpha = alpha;
     this._drawActor(ctx, p.anim.fx, p.anim.fy, tp, portrait, {
-      dir: p.dir, bob, lungeT, lungeDir, fallback: fb, scale: 1,
+      dir: p.dir, bob, lungeT, lungeDir, flash: hurtFlash, fallback: fb, scale: 1,
     });
     ctx.globalAlpha = 1;
+    const px = (p.anim.fx + 0.5) * tp, py = (p.anim.fy + 0.9) * tp;
+    if (p.poisonTurns > 0) this._drawStatusRing(ctx, px, py, tp, PLAYER_STATUS_COLORS.poison, now, 0.18, 0.38);
+    if (p.slowTurns > 0) this._drawStatusRing(ctx, px, py, tp, PLAYER_STATUS_COLORS.slow, now + 240, 0.26, 0.48);
+    if (p.magnetizedTurns > 0) this._drawStatusRing(ctx, px, py, tp, PLAYER_STATUS_COLORS.magnet, now + 480, 0.34, 0.56, true);
   },
 
-  // ---------- 背景画像レイヤー ----------
+
+_drawStatusRing(ctx, x, y, tp, color, now, rMin, rMax, squared){
+  const pulse = 0.5 + 0.5 * Math.sin(now/150);
+  const r = tp * (rMin + (rMax-rMin) * pulse);
+  ctx.save();
+  ctx.globalAlpha = 0.45;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(2, tp*0.04);
+  if (squared){
+    ctx.strokeRect(x-r*0.6, y-r*0.35, r*1.2, r*0.7);
+  } else {
+    ctx.beginPath();
+    ctx.ellipse(x, y, r, r*0.42, 0, 0, Math.PI*2);
+    ctx.stroke();
+  }
+  ctx.restore();
+},
+
+// ---------- 背景画像レイヤー ----------
   _drawBgLayer(ctx, world, tp, alpha){
     const img = bgImage(this.st.mode);
     if (!img) return;
@@ -1776,38 +2199,123 @@ const GAME = {
     }
     // 東門の明滅矢印
     const g = v.gate;
-    ctx.globalAlpha = .5 + .5 * Math.sin(now/300);
-    ctx.fillStyle = "#f5a623";
+    const elderDone = !!(this.st.flags && this.st.flags.talked && this.st.flags.talked.elder);
+    ctx.globalAlpha = elderDone ? (.5 + .5 * Math.sin(now/300)) : 0.32;
+    ctx.fillStyle = elderDone ? "#f5a623" : "#c9b38b";
     ctx.font = `bold ${Math.round(tp*.5)}px monospace`;
-    ctx.fillText("\u25b6", (g[0]-0.4)*tp, (g[1]+0.65)*tp);
+    ctx.fillText("▶", (g[0]-0.4)*tp, (g[1]+0.65)*tp);
     ctx.globalAlpha = 1;
+  },
+
+  _drawSpeakerMarker(ctx, x, y, tp, label, now){
+    const pulse = 0.5 + 0.5 * Math.sin(now / 170);
+    const cx = (x + 0.5) * tp, cy = (y - 0.90) * tp;
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.font = `bold ${Math.max(9, Math.round(tp * 0.23))}px sans-serif`;
+    const w = Math.max(tp * 1.08, ctx.measureText(label).width + 14);
+    const h = Math.max(15, tp * 0.31);
+    ctx.globalAlpha = 0.68;
+    ctx.fillStyle = "rgba(17,20,24,0.72)";
+    ctx.fillRect(cx - w/2, cy - h/2, w, h);
+    ctx.globalAlpha = 0.88;
+    ctx.strokeStyle = `rgba(255,210,74,${0.56 + pulse*0.22})`;
+    ctx.lineWidth = Math.max(1, tp*0.028);
+    ctx.strokeRect(cx - w/2, cy - h/2, w, h);
+    ctx.fillStyle = "#fff6d8";
+    ctx.fillText(label, cx, cy + h*0.23);
+    ctx.beginPath();
+    ctx.globalAlpha = 0.24 + pulse*0.14;
+    ctx.strokeStyle = "#ffd24a";
+    ctx.ellipse((x+0.5)*tp, (y+0.94)*tp, tp*0.40, tp*0.12, 0, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.restore();
+  },
+
+  _drawObjectiveMarker(ctx, x, y, tp, now){
+    const pulse = 0.5 + 0.5 * Math.sin(now / 240);
+    const cx = (x + 0.5) * tp, cy = (y - 1.12) * tp;
+    const r = Math.max(9, tp * 0.20);
+    ctx.save();
+    ctx.globalAlpha = 0.92;
+    ctx.fillStyle = "rgba(255,210,74,0.95)";
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 0.78 + pulse * 0.18;
+    ctx.strokeStyle = "rgba(80,46,4,0.92)";
+    ctx.lineWidth = Math.max(1, tp * 0.028);
+    ctx.stroke();
+    ctx.fillStyle = "#3b2405";
+    ctx.font = `bold ${Math.max(10, Math.round(tp * 0.22))}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.fillText("!", cx, cy + r*0.36);
+    ctx.restore();
   },
 
   // 集落の立ち絵(NPC + プレイヤー)を足元Yでソートして描画
   _drawActorsVillage(ctx, tp, now){
     const st = this.st, v = st.village, p = st.player;
+    if (!UI.talking) this._activeTalkNpcId = null;
+    const npcTune = {
+      logistics: { scale:0.94, yOffset:-0.02 },
+      builder:   { scale:0.94, yOffset:0.00 },
+      medic:     { scale:0.92, yOffset:0.00 },
+      sorter:    { scale:0.82, yOffset:0.05 },
+      child:     { scale:0.68, yOffset:0.08 },
+    };
     const actors = [];
     for (const n of v.npcs){
       n._fx = (n._fx==null?n.x:n._fx); n._fy = (n._fy==null?n.y:n._fy);
-      actors.push({ kind:"npc", n, y:n.y });
+      const keyBody = resolveNpcBody(n.body);
+      actors.push({ kind:"npc", n, keyBody, y:n.y + ((npcTune[keyBody] && npcTune[keyBody].yOffset) || 0) });
     }
     actors.push({ kind:"player", y:p.anim.fy });
     actors.sort((a,b)=>a.y-b.y);
     for (const a of actors){
       if (a.kind === "player"){ this._drawPlayer(ctx, tp, now); continue; }
       const n = a.n;
-      const portrait = npcPortrait(n.body);
-      const fb = SPR.npc[n.body] ? SPR.npc[n.body].down[Math.floor(now/450)%2] : null;
-      const bob = Math.sin(now/620 + n.x) * tp*0.02 + tp*0.02;
-      const npcScale = (n.body === "child") ? 0.66 : 0.92;
-      this._drawActor(ctx, n.x, n.y, tp, portrait, { dir:2, bob, fallback:fb, scale:npcScale });
+      const keyBody = a.keyBody || resolveNpcBody(n.body);
+      const activeTalk = !!(UI.talking && this._activeTalkNpcId === n.id);
+      const nearPlayer = dist8(n.x,n.y,p.x,p.y) <= 1;
+      const talkPhase = UI.talkPhase || 0;
+      const npcState = activeTalk ? ((Math.floor(talkPhase / 520) % 2 === 0) ? "talk" : "react") : (nearPlayer ? "react" : "idle");
+      const portrait = npcPortrait(keyBody, npcState);
+      const fb = SPR.npc[keyBody] ? SPR.npc[keyBody].down[Math.floor(now/450)%2] : null;
+      const bob = activeTalk
+        ? (Math.sin(now/180 + n.x) * tp*0.022 + tp*0.034)
+        : (nearPlayer ? Math.sin(now/520 + n.x) * tp*0.018 + tp*0.020 : Math.sin(now/760 + n.x) * tp*0.012 + tp*0.014);
+      const tune = npcTune[keyBody] || { scale:0.92, yOffset:0 };
+      let dir = 2;
+      if (nearPlayer || activeTalk){
+        const dx = p.x - n.x, dy = p.y - n.y;
+        if (Math.abs(dx) >= Math.abs(dy) && dx !== 0) dir = dx < 0 ? 4 : 6;
+      }
+      if (activeTalk){
+        ctx.save();
+        ctx.globalAlpha = 0.16 + 0.10*Math.abs(Math.sin(now/180));
+        ctx.fillStyle = "#ffd24a";
+        ctx.beginPath();
+        ctx.ellipse((n.x+0.5)*tp, (n.y+0.92)*tp, tp*0.40, tp*0.12, 0, 0, Math.PI*2);
+        ctx.fill();
+        ctx.restore();
+      }
+      this._drawActor(ctx, n.x, n.y + tune.yOffset, tp, portrait, { dir, bob, fallback:fb, scale:tune.scale + (activeTalk ? 0.035 : 0) });
+      if (activeTalk){
+        this._drawSpeakerMarker(ctx, n.x, n.y + tune.yOffset, tp, UI.talkingName || n.name, now);
+      } else if (this._villageObjectiveNpcId() === n.id){
+        this._drawObjectiveMarker(ctx, n.x, n.y + tune.yOffset, tp, now);
+      }
       // 会話可能マーク
-      if (dist8(n.x,n.y,p.x,p.y) <= 1){
-        const mx = (n.x+0.5)*tp, my = (n.y-0.85)*tp - Math.sin(now/250)*3;
+      if (nearPlayer && !activeTalk){
+        const mx = (n.x+0.5)*tp, my = (n.y-0.98)*tp - Math.sin(now/250)*2.5;
+        ctx.save();
+        ctx.globalAlpha = 0.82;
         ctx.fillStyle = "#fff6d8";
-        ctx.font = `bold ${Math.round(tp*.5)}px monospace`;
+        ctx.font = `bold ${Math.round(tp*.42)}px monospace`;
         ctx.textAlign = "center";
-        ctx.fillText("\u25bc", mx, my);
+        ctx.fillText("▼", mx, my);
+        ctx.restore();
         ctx.textAlign = "left";
       }
     }
@@ -1993,7 +2501,10 @@ const GAME = {
     const fbs = (e.primed && SPR.enemy[e.id+"_primed"]) ? SPR.enemy[e.id+"_primed"] : SPR.enemy[e.id];
     const fb = fbs ? fbs[frame] : null;
     const isBoss = def.ai === "boss";
-    const scale = isBoss ? 1.5 : (def.body === "golem" || def.body === "arm" || def.body === "grendel" || e.id === "coreDefender" || e.id === "dismantler" ? 1.18 : 0.95);
+    const tune = ENEMY_RENDER_TUNE[e.id] || {};
+    const scaleBase = isBoss ? 1.5 : (def.body === "golem" || def.body === "arm" || def.body === "grendel" || e.id === "coreDefender" || e.id === "dismantler" ? 1.18 : 0.95);
+    const scale = scaleBase * (tune.scale || 1);
+    const drawFy = e.anim.fy + (tune.yOffset || 0);
     let lungeT = null, lungeDir = null;
     if (e.lunge){
       lungeT = (now - e.lunge.t0) / CONFIG.ATTACK_MS;
@@ -2005,26 +2516,97 @@ const GAME = {
     const fl = this.effects.find(f => f.type==="flash" && f.target===e);
     const flash = fl ? (1 - (now-fl.t0)/fl.dur) : 0;
     // 自爆予兆: 赤く明滅
-    if (e.primed){ ctx.globalAlpha = 0.6 + 0.4*Math.abs(Math.sin(now/80)); }
-    this._drawActor(ctx, e.anim.fx, e.anim.fy, tp, portrait, {
+    const baseAlpha = (e.id === "camouflageUnit" && !e.awake && dist8(e.x, e.y, this.st.player.x, this.st.player.y) > 1) ? (0.35 + 0.1*Math.sin(now/110)) : 1;
+    if (e.primed){ ctx.globalAlpha = (0.6 + 0.4*Math.abs(Math.sin(now/80))) * baseAlpha; }
+    else ctx.globalAlpha = baseAlpha;
+    this._drawActor(ctx, e.anim.fx, drawFy, tp, portrait, {
       dir: e.dir, bob, lungeT, lungeDir, flash, fallback: fb, scale,
     });
     ctx.globalAlpha = 1;
+    const footX = (e.anim.fx+0.5)*tp, footY = (drawFy+0.95)*tp;
+    const dh = tp*1.25*scale, dw = portrait ? dh*(portrait.width/portrait.height) : tp*scale;
     // primed の赤オーバーレイ
     if (e.primed && portrait){
-      const footX = (e.anim.fx+0.5)*tp, footY = (e.anim.fy+0.95)*tp;
-      const dh = tp*1.25*scale, dw = dh*(portrait.width/portrait.height);
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
       ctx.globalAlpha = 0.3*Math.abs(Math.sin(now/80));
       ctx.fillStyle = "#ff5d4d";
       ctx.fillRect(footX-dw/2, footY-dh, dw, dh);
+      const ring = tp * (0.16 + 0.10*Math.abs(Math.sin(now/80)));
+      ctx.strokeStyle = "rgba(255,93,77,.95)";
+      ctx.lineWidth = Math.max(2, tp*0.05);
+      ctx.beginPath();
+      ctx.ellipse(footX, footY-2, ring*1.4, ring*.68, 0, 0, Math.PI*2);
+      ctx.stroke();
       ctx.restore();
     }
+    // 展開シールドのバリア表示
+    if (e.shieldTurns > 0){
+      const pulse = 0.5 + 0.5*Math.sin(now/150 + e.x + e.y);
+      const rx = Math.max(tp*0.42, dw*0.43), ry = Math.max(tp*0.54, dh*0.48);
+      const cy = footY - dh*0.54;
+      ctx.save();
+      ctx.globalAlpha = 0.12 + 0.06*pulse;
+      ctx.fillStyle = "#8fd0ff";
+      ctx.beginPath();
+      ctx.ellipse(footX, cy, rx, ry, 0, 0, Math.PI*2);
+      ctx.fill();
+      ctx.globalAlpha = 0.7;
+      ctx.strokeStyle = `rgba(143,208,255,${0.70 + 0.18*pulse})`;
+      ctx.lineWidth = Math.max(2, tp*0.045);
+      ctx.beginPath();
+      ctx.ellipse(footX, cy, rx, ry, 0, 0, Math.PI*2);
+      ctx.stroke();
+      ctx.globalAlpha = 0.45;
+      ctx.strokeStyle = `rgba(216,245,255,${0.4 + 0.25*pulse})`;
+      ctx.beginPath();
+      ctx.ellipse(footX, cy, rx*0.78, ry*0.78, 0, 0, Math.PI*2);
+      ctx.stroke();
+      for (let i=0; i<6; i++){
+        const a = (Math.PI*2/6)*i + now/900;
+        const x = footX + Math.cos(a)*rx*0.9;
+        const y = cy + Math.sin(a)*ry*0.9;
+        ctx.fillStyle = "rgba(216,245,255,.8)";
+        ctx.fillRect(x-1.5, y-1.5, 3, 3);
+      }
+      ctx.restore();
+    }
+    // 補給中バフの軽いオーラ
+    if (e.buffTurns > 0){
+      const pulse = 0.55 + 0.45*Math.sin(now/170 + e.x*0.7);
+      ctx.save();
+      ctx.globalAlpha = 0.26 + 0.08*pulse;
+      ctx.strokeStyle = "#ffd24a";
+      ctx.lineWidth = Math.max(2, tp*0.04);
+      ctx.beginPath();
+      ctx.arc(footX, footY-2, tp*(0.20 + 0.02*pulse), 0, Math.PI*2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+if (e.id === "scoutEye"){
+  const pulse = 0.45 + 0.35*Math.sin(now/160 + e.x);
+  ctx.save();
+  ctx.strokeStyle = `rgba(61,218,215,${0.28 + pulse*0.18})`;
+  ctx.lineWidth = Math.max(1, tp*0.03);
+  ctx.beginPath();
+  ctx.ellipse(footX, footY-2, tp*0.58, tp*0.22, 0, 0, Math.PI*2);
+  ctx.stroke();
+  ctx.restore();
+}
+if (e.id === "camouflageUnit" && !e.awake){
+  ctx.save();
+  ctx.globalAlpha = 0.22 + 0.08*Math.sin(now/90);
+  ctx.strokeStyle = "#c08bff";
+  ctx.setLineDash([tp*0.12, tp*0.08]);
+  ctx.beginPath();
+  ctx.ellipse(footX, footY-dh*0.56, dw*0.42, dh*0.34, 0, 0, Math.PI*2);
+  ctx.stroke();
+  ctx.restore();
+}
     // HPバー(立ち絵の頭上)
     if (e.hp < e.maxHp){
-      const dh = tp*1.25*scale;
-      const w = tp * .8, hx = (e.anim.fx+0.5)*tp - w/2, hy = (e.anim.fy+0.95)*tp - dh - 4;
+      const w = tp * .8, hx = (e.anim.fx+0.5)*tp - w/2, hy = (drawFy+0.95)*tp - dh - 4;
       ctx.fillStyle = "rgba(10,12,14,.85)"; ctx.fillRect(hx-1, hy-1, w+2, 5);
       ctx.fillStyle = e.hp/e.maxHp > .5 ? "#7ed47e" : e.hp/e.maxHp > .25 ? "#f5a623" : "#ff5d4d";
       ctx.fillRect(hx, hy, w * Math.max(0, e.hp/e.maxHp), 3);
@@ -2034,14 +2616,14 @@ const GAME = {
       ctx.fillStyle = "#ffd24a";
       ctx.font = `bold ${Math.round(tp*.28)}px monospace`;
       ctx.textAlign = "center";
-      ctx.fillText(def.name, (e.anim.fx+0.5)*tp, (e.anim.fy+0.95)*tp - tp*1.25*scale - 8);
+      ctx.fillText(def.name, (e.anim.fx+0.5)*tp, (drawFy+0.95)*tp - tp*1.25*scale - 8);
       ctx.textAlign = "left";
     }
     // スタン表示
     if (e.stun > 0){
       ctx.fillStyle = "#9fe08a";
       ctx.font = `bold ${Math.round(tp*.4)}px monospace`;
-      const zx = (e.anim.fx+0.7)*tp, zy = (e.anim.fy+0.2)*tp + Math.sin(now/200)*3;
+      const zx = (e.anim.fx+0.7)*tp, zy = (drawFy+0.2)*tp + Math.sin(now/200)*3;
       ctx.fillText("z", zx, zy);
     }
   },
@@ -2061,6 +2643,44 @@ const GAME = {
         ctx.fillText(f.text, f.x*tp + tp/2, f.y*tp - t*tp*.5 + tp*.2);
         ctx.textAlign = "left";
         ctx.globalAlpha = 1;
+      } else if (f.type === "meleeArc"){
+        const x1 = f.x1*tp + tp/2, y1 = f.y1*tp + tp/2;
+        const x2 = f.x2*tp + tp/2, y2 = f.y2*tp + tp/2;
+        const mx = (x1+x2)/2, my = (y1+y2)/2;
+        const dx = x2-x1, dy = y2-y1;
+        const len = Math.max(1, Math.hypot(dx,dy));
+        const nx = -dy/len, ny = dx/len;
+        ctx.save();
+        ctx.globalAlpha = (1-t) * (f.strong ? 0.92 : 0.55);
+        ctx.strokeStyle = f.color || "#fff6d8";
+        ctx.lineWidth = Math.max(2, tp*(f.strong ? 0.074 : 0.046));
+        ctx.beginPath();
+        ctx.moveTo(x1 + dx*0.20, y1 + dy*0.20);
+        ctx.quadraticCurveTo(mx + nx*tp*0.24*Math.sin(t*Math.PI), my + ny*tp*0.24*Math.sin(t*Math.PI), x2 - dx*0.20, y2 - dy*0.20);
+        ctx.stroke();
+        ctx.globalAlpha *= 0.45;
+        ctx.lineWidth = Math.max(1, tp*0.022);
+        ctx.beginPath();
+        ctx.moveTo(x1 + dx*0.32, y1 + dy*0.32);
+        ctx.lineTo(x2 - dx*0.25, y2 - dy*0.25);
+        ctx.stroke();
+        ctx.restore();
+      } else if (f.type === "hitImpact"){
+        const cx = f.x*tp + tp/2, cy = f.y*tp + tp*0.42;
+        ctx.save();
+        ctx.globalAlpha = (1-t) * 0.85;
+        ctx.strokeStyle = f.color || "#fff6d8";
+        ctx.lineWidth = Math.max(2, tp*0.050);
+        for (let i=0;i<6;i++){
+          const a = (Math.PI*2*i/6) + t*0.5;
+          const r1 = tp*(0.07 + t*0.10);
+          const r2 = tp*(0.19 + t*0.26);
+          ctx.beginPath();
+          ctx.moveTo(cx + Math.cos(a)*r1, cy + Math.sin(a)*r1);
+          ctx.lineTo(cx + Math.cos(a)*r2, cy + Math.sin(a)*r2);
+          ctx.stroke();
+        }
+        ctx.restore();
       } else if (f.type === "burst"){
         ctx.fillStyle = f.hue;
         ctx.globalAlpha = 1 - t;
@@ -2081,6 +2701,213 @@ const GAME = {
         ctx.arc(f.x*tp + tp/2, f.y*tp + tp/2, r*.55, 0, Math.PI*2);
         ctx.fill();
         ctx.globalAlpha = 1;
+      } else if (f.type === "healLink"){
+        const x1 = f.x1*tp + tp/2, y1 = f.y1*tp + tp/2;
+        const x2 = f.x2*tp + tp/2, y2 = f.y2*tp + tp/2;
+        ctx.strokeStyle = `rgba(159,224,138,${0.85*(1-t)})`;
+        ctx.lineWidth = Math.max(2, tp*0.08);
+        ctx.beginPath();
+        ctx.moveTo(x1,y1);
+        ctx.lineTo(x2,y2);
+        ctx.stroke();
+        const bx = x1 + (x2-x1)*t, by = y1 + (y2-y1)*t;
+        ctx.fillStyle = "#d8ffd0";
+        ctx.globalAlpha = 1 - t*.35;
+        ctx.beginPath();
+        ctx.arc(bx, by, Math.max(2, tp*0.12), 0, Math.PI*2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      } else if (f.type === "healPulse"){
+        const cx = f.x*tp + tp/2, cy = f.y*tp + tp/2;
+        const r = tp * (0.12 + t*0.5);
+        ctx.globalAlpha = 0.9*(1-t);
+        ctx.strokeStyle = "#9fe08a";
+        ctx.lineWidth = Math.max(2, tp*0.06);
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI*2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx-r*.45, cy); ctx.lineTo(cx+r*.45, cy);
+        ctx.moveTo(cx, cy-r*.45); ctx.lineTo(cx, cy+r*.45);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      } else if (f.type === "alarmPulse"){
+        const cx = f.x*tp + tp/2, cy = f.y*tp + tp/2;
+        const r = tp * ((f.strong ? 0.18 : 0.10) + t*(f.strong ? 1.05 : 0.75));
+        ctx.globalAlpha = (1-t) * (f.strong ? 0.9 : 0.65);
+        ctx.strokeStyle = f.strong ? "#ff7c69" : "#ff5d4d";
+        ctx.lineWidth = Math.max(2, tp*(f.strong ? 0.07 : 0.05));
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI*2);
+        ctx.stroke();
+        if (f.strong){
+          ctx.beginPath();
+          ctx.arc(cx, cy, r*0.6, 0, Math.PI*2);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      } else if (f.type === "supplyLink"){
+        const x1 = f.x1*tp + tp/2, y1 = f.y1*tp + tp/2;
+        const x2 = f.x2*tp + tp/2, y2 = f.y2*tp + tp/2;
+        ctx.save();
+        ctx.strokeStyle = `rgba(255,210,74,${0.9*(1-t)})`;
+        ctx.lineWidth = Math.max(2, tp*0.07);
+        ctx.setLineDash([tp*0.12, tp*0.08]);
+        ctx.lineDashOffset = -t*tp*0.7;
+        ctx.beginPath();
+        ctx.moveTo(x1,y1); ctx.lineTo(x2,y2);
+        ctx.stroke();
+        ctx.restore();
+        const bx = x1 + (x2-x1)*t, by = y1 + (y2-y1)*t;
+        ctx.globalAlpha = 1-t*0.35;
+        ctx.fillStyle = "#fff1a8";
+        ctx.fillRect(bx-tp*0.08, by-tp*0.08, tp*0.16, tp*0.16);
+        ctx.globalAlpha = 1;
+      } else if (f.type === "supplyPulse"){
+        const cx = f.x*tp + tp/2, cy = f.y*tp + tp/2;
+        const r = tp * (0.12 + t*0.55);
+        ctx.save();
+        ctx.globalAlpha = 0.85*(1-t);
+        ctx.strokeStyle = "#ffd24a";
+        ctx.lineWidth = Math.max(2, tp*0.06);
+        ctx.strokeRect(cx-r*0.55, cy-r*0.55, r*1.1, r*1.1);
+        ctx.beginPath();
+        ctx.arc(cx, cy, r*0.7, 0, Math.PI*2);
+        ctx.stroke();
+        ctx.restore();
+      } else if (f.type === "shieldLink"){
+        const x1 = f.x1*tp + tp/2, y1 = f.y1*tp + tp/2;
+        const x2 = f.x2*tp + tp/2, y2 = f.y2*tp + tp/2;
+        ctx.save();
+        ctx.strokeStyle = `rgba(143,208,255,${0.9*(1-t)})`;
+        ctx.lineWidth = Math.max(2, tp*0.06);
+        ctx.beginPath();
+        ctx.moveTo(x1,y1); ctx.lineTo(x2,y2);
+        ctx.stroke();
+        for (let i=0; i<3; i++){
+          const q = (t + i*0.22) % 1;
+          const px = x1 + (x2-x1)*q, py = y1 + (y2-y1)*q;
+          ctx.fillStyle = "rgba(216,245,255,.95)";
+          ctx.fillRect(px-1.5, py-1.5, 3, 3);
+        }
+        ctx.restore();
+      } else if (f.type === "shieldPulse"){
+        const cx = f.x*tp + tp/2, cy = f.y*tp + tp/2;
+        const rx = tp * (0.18 + t*0.65), ry = tp * (0.22 + t*0.82);
+        ctx.save();
+        ctx.globalAlpha = 0.85*(1-t);
+        ctx.strokeStyle = "#8fd0ff";
+        ctx.lineWidth = Math.max(2, tp*0.06);
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI*2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, rx*0.72, ry*0.72, 0, 0, Math.PI*2);
+        ctx.stroke();
+        ctx.restore();
+      } else if (f.type === "scrapImpact"){
+        const cx = f.x*tp + tp/2, cy = f.y*tp + tp/2;
+        ctx.save();
+        ctx.globalAlpha = 0.75*(1-t);
+        ctx.strokeStyle = "#d9a86b";
+        ctx.lineWidth = Math.max(2, tp*0.05);
+        ctx.beginPath();
+        ctx.arc(cx, cy, tp*(0.14 + 0.45*t), 0, Math.PI*2);
+        ctx.stroke();
+        ctx.fillStyle = "#caa25a";
+        for (const pt of f.parts){
+          const r = tp * 0.12 + t * pt.sp * tp * 0.7;
+          const px = cx + Math.cos(pt.a)*r;
+          const py = cy + Math.sin(pt.a)*r - Math.sin(t*Math.PI)*tp*0.08;
+          ctx.save();
+          ctx.translate(px, py);
+          ctx.rotate(pt.a + t*4);
+          ctx.fillRect(-pt.w*0.35, -pt.r, pt.w*0.7, pt.r*2);
+          ctx.restore();
+        }
+        ctx.restore();
+      } else if (f.type === "scanPulse"){
+        const cx = f.x*tp + tp/2, cy = f.y*tp + tp/2;
+        const sprite = fxSprite("holoScan");
+        ctx.save();
+        if (sprite){
+          ctx.globalAlpha = 0.82 * (1 - t*0.45);
+          const s = tp * (1.35 + t*0.35);
+          ctx.drawImage(sprite, cx - s/2, cy - s/2, s, s);
+        }
+        ctx.globalAlpha = (1 - t) * 0.7;
+        ctx.strokeStyle = f.found ? "#3ddad7" : "#7bd1d0";
+        ctx.lineWidth = Math.max(2, tp*0.05);
+        ctx.beginPath(); ctx.arc(cx, cy, tp*(0.25 + t*0.85), 0, Math.PI*2); ctx.stroke();
+        ctx.restore();
+      } else if (f.type === "appearPulse"){
+        const cx = f.x*tp + tp/2, cy = f.y*tp + tp/2;
+        ctx.save();
+        ctx.globalAlpha = (1 - t) * 0.75;
+        ctx.strokeStyle = "#c08bff";
+        ctx.lineWidth = Math.max(2, tp*0.07);
+        ctx.beginPath(); ctx.arc(cx, cy, tp*(0.18 + t*0.65), 0, Math.PI*2); ctx.stroke();
+        ctx.restore();
+      } else if (f.type === "splitPulse"){
+        const cx = f.x*tp + tp/2, cy = f.y*tp + tp/2;
+        ctx.save();
+        ctx.globalAlpha = (1 - t) * 0.72;
+        ctx.strokeStyle = "#d8d2c4";
+        ctx.lineWidth = Math.max(2, tp*0.06);
+        ctx.beginPath(); ctx.arc(cx, cy, tp*(0.16 + t*0.75), 0, Math.PI*2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(cx, cy, tp*(0.10 + t*0.42), 0, Math.PI*2); ctx.stroke();
+        ctx.restore();
+      } else if (f.type === "mistCloud"){
+        const cx = f.x*tp + tp/2, cy = f.y*tp + tp/2;
+        const sprite = fxSprite("toxicSmoke") || fxSprite("pollution");
+        ctx.save();
+        ctx.globalAlpha = 0.92 * (1 - t*0.25);
+        if (sprite){
+          const s = tp * (1.9 + Math.sin(t*Math.PI)*0.45);
+          ctx.drawImage(sprite, cx - s/2, cy - s/2, s, s);
+        }
+        ctx.restore();
+      } else if (f.type === "coldPulse"){
+        const cx = f.x*tp + tp/2, cy = f.y*tp + tp/2;
+        const sprite = fxSprite("frostBurst");
+        ctx.save();
+        ctx.globalAlpha = 0.95 * (1 - t*0.18);
+        if (sprite){
+          const s = tp * (2.0 + Math.sin(t*Math.PI)*0.35);
+          ctx.drawImage(sprite, cx - s/2, cy - s/2, s, s);
+        }
+        ctx.globalAlpha = (1 - t) * 0.7;
+        ctx.strokeStyle = "#c8f0ff";
+        ctx.lineWidth = Math.max(2, tp*0.05);
+        ctx.beginPath(); ctx.arc(cx, cy, tp*(0.22 + t*0.85), 0, Math.PI*2); ctx.stroke();
+        ctx.restore();
+      } else if (f.type === "magnetBeam"){
+        const x1 = f.x1*tp + tp/2, y1 = f.y1*tp + tp/2;
+        const x2 = f.x2*tp + tp/2, y2 = f.y2*tp + tp/2;
+        ctx.save();
+        ctx.strokeStyle = `rgba(255,210,74,${0.85*(1-t)})`;
+        ctx.lineWidth = Math.max(2, tp*0.08);
+        ctx.beginPath();
+        ctx.moveTo(x1,y1);
+        const mx = (x1+x2)/2 + Math.sin(t*Math.PI)*tp*0.25;
+        const my = (y1+y2)/2 - Math.cos(t*Math.PI)*tp*0.15;
+        ctx.quadraticCurveTo(mx, my, x2, y2);
+        ctx.stroke();
+        ctx.restore();
+      } else if (f.type === "magnetPulse"){
+        const cx = f.x*tp + tp/2, cy = f.y*tp + tp/2;
+        const sprite = fxSprite("goldenWave");
+        ctx.save();
+        ctx.globalAlpha = 0.9 * (1 - t*0.2);
+        if (sprite){
+          const s = tp * (1.7 + t*0.65);
+          ctx.drawImage(sprite, cx - s/2, cy - s/2, s, s);
+        }
+        ctx.globalAlpha = (1-t) * 0.75;
+        ctx.strokeStyle = "#ffd24a";
+        ctx.lineWidth = Math.max(2, tp*0.05);
+        ctx.beginPath(); ctx.arc(cx, cy, tp*(0.18 + t*0.95), 0, Math.PI*2); ctx.stroke();
+        ctx.restore();
       } else if (f.type === "proj"){
         const x = f.x1 + (f.x2 - f.x1) * t, y = f.y1 + (f.y2 - f.y1) * t;
         if (f.sprite){

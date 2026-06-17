@@ -214,6 +214,8 @@ function makeEnemy(id, x, y, floor){
     dir: 2, anim: { fx:x, fy:y, frame:0 },
     stun: 0, primed: false, awake: false,
     actGauge: 0, shieldTurns: 0, buffTurns: 0, buffAmt: 0,
+    scanCd: 0, camoCd: 0, splitCd: 0, mistCd: 0, coolCd: 0, magnetCd: 0,
+    splitDone: false, splitChild: false,
     carryItem: null, alarmCharge: 0, boomTimer: 0,
   };
 }

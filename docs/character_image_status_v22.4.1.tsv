@@ -1,0 +1,13 @@
+file	width	height	has_alpha	bbox_left	bbox_top	bbox_right	bbox_bottom	bbox_width	bbox_height	foot_margin	center_offset_px	role	status	priority	note
+builder.png	208	256	yes	23	6	185	246	162	240	10	0.0	町NPC 機械工	専用画像あり	低	頭身・線の重さは比較的良好。主人公より年長感あり
+cleaner.png	208	256	yes	0	6	208	246	208	240	10	0.0	流用ロボ	既存流用	高	敵寄りロボ。chars配下だがNPC統一対象外寄り
+dismantler.png	208	256	yes	0	6	208	246	208	240	10	0.0	流用ロボ	既存流用	高	敵寄り。chars配下整理候補
+guardian.png	208	256	yes	0	6	208	246	208	240	10	0.0	流用ロボ	既存流用	高	敵寄り。chars配下整理候補
+hunter.png	208	256	yes	4	6	203	246	199	240	10	-0.5	流用ロボ	既存流用	高	敵寄り。chars配下整理候補
+logistics.png	208	256	yes	24	6	184	246	160	240	10	0.0	町NPC 長老/記録係	専用画像あり	低	頭身や塗りは概ね統一
+medic.png	208	256	yes	25	6	183	246	158	240	10	0.0	町NPC 医療担当	専用画像あり	低	主人公と近い画風で使用継続しやすい
+player.png	208	256	yes	40	7	168	245	128	238	11	0.0	旧主人公汎用	既存流用	中	町/ダンジョン新基準より少し幼め。今後用途整理候補
+player_dungeon.png	208	256	yes	56	8	152	245	96	237	11	0.0	主人公基準絵(ダンジョン)	専用画像あり	低	新規基準絵。マスク・ゴーグル・防護装備
+player_town.png	208	256	yes	58	7	150	245	92	238	11	0.0	主人公基準絵(町)	専用画像あり	低	新規基準絵。若い発掘家。敵アートと近い手描き風
+soldier.png	208	256	yes	4	6	204	246	200	240	10	0.0	流用ロボ	既存流用	高	敵寄り。chars配下整理候補
+sorter.png	208	256	yes	30	6	177	246	147	240	10	-0.5	町NPC 物流/補助ロボ	専用画像あり	中	人間ではなく小型ロボ。町NPC群の脇役としては許容

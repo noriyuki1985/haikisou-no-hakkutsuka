@@ -71,7 +71,7 @@ button{font-family:var(--mono);cursor:pointer}
 #hud{display:flex;align-items:center;gap:8px;padding:6px 8px;
   padding-top:calc(6px + env(safe-area-inset-top));
   background:linear-gradient(#2a333c,#1e252c);border-bottom:1px solid var(--line);
-  font-size:12px;flex:0 0 auto;min-height:40px}
+  font-size:12px;flex:0 0 auto;min-height:40px;flex-wrap:wrap;row-gap:4px}
 .hud-cell{display:flex;align-items:center;gap:5px;white-space:nowrap}
 .hud-floor{color:var(--amber-soft);font-weight:700;font-size:14px;letter-spacing:.1em;min-width:52px;
   text-shadow:0 0 8px rgba(255,181,61,.3)}
@@ -85,6 +85,11 @@ button{font-family:var(--mono);cursor:pointer}
 .bar-fill.hp.crit{background:linear-gradient(#ff7a6b,#d83a2a);animation:blink 1s infinite}
 .bar-fill.belly{background:linear-gradient(#ffd98a,#caa23a)}
 .hud-belly{margin-left:auto}
+.hud-status{display:flex;align-items:center;justify-content:flex-end;gap:4px;min-width:0;max-width:100%;overflow:visible;flex:1 1 100%;min-height:20px}
+.status-chip{display:inline-flex;align-items:center;height:22px;padding:0 7px;border-radius:3px;border:1px solid var(--line);background:rgba(10,12,14,.55);font-size:11px;line-height:1;white-space:nowrap}
+.status-chip.poison{color:#9de768;border-color:#4a7a35}
+.status-chip.slow{color:#8fd0ff;border-color:#3d6d88}
+.status-chip.magnet{color:#ffd24a;border-color:#80671d}
 .hud-btn{background:var(--panel2);border:1px solid var(--line);color:var(--amber-soft);
   width:30px;height:30px;border-radius:3px;font-size:14px}
 .hud-btn.off{color:var(--text-dim);text-decoration:line-through}
@@ -155,7 +160,7 @@ button{font-family:var(--mono);cursor:pointer}
 
 /* ---------- ダイアログ ---------- */
 .dialog-panel{max-width:340px}
-.dialog-text{font-size:14px;line-height:1.8;margin-bottom:14px;white-space:pre-line}
+.dialog-text{font-size:14px;line-height:1.8;margin-bottom:14px;white-space:pre-line;max-height:52vh;overflow-y:auto;padding-right:4px}
 .dialog-buttons{display:flex;gap:8px}
 .dialog-buttons button{flex:1;padding:12px;background:var(--panel2);border:1px solid var(--amber-dim);
   color:var(--amber-soft);border-radius:4px;font-size:14px}
@@ -199,4 +204,10 @@ button{font-family:var(--mono);cursor:pointer}
 @media (min-width:700px){
   .title-logo{font-size:64px}
   #log{font-size:13px;right:140px}
+}
+
+
+@media (min-width:560px){
+  #hud{flex-wrap:nowrap;min-height:40px}
+  .hud-status{flex:0 1 auto;max-width:260px;min-height:0}
 }

@@ -1,37 +1,24 @@
 # assets/enemies
 
-敵専用立ち絵の配置先。v21.5.0では `grinder.png` の暫定敵専用PNGを同梱。その他は未配置時フォールバック。
+敵専用立ち絵の配置先です。
 
-追加予定ファイル:
-
-- cleaner.png
-- collector_drone.png
-- guard_drone.png
-- cutter.png
-- suction_unit.png
+## v21.9.0 時点の専用画像
 - grinder.png
-- welder.png
-- compressor.png
 - boomcell.png
+- collector_drone.png
 - repairbit.png
-- supply_pod.png
-- carrier.png
-- dumper.png
-- shield_deployer.png
 - alarm_beacon.png
+- shield_deployer.png
+- supply_pod.png
+- dumper.png
 - drill_rig.png
-- scout_eye.png
+- suction_unit.png
+- welder.png
+- sniper_turret.png
 - magnet_unit.png
 - mist_sprayer.png
 - cooler.png
-- camouflage_unit.png
-- splitter_bit.png
-- sniper_turret.png
-- dismantler.png
-- core_defender.png
-- warden.png
 
-上記PNGを配置すると、js/assets.js の optionalManifest と js/sprites.js の ENEMY_ART により自動的に専用画像が使われる。
-未配置の場合は既存の assets/chars/* 画像と fallbackTint に戻る。
-
-- v21.5.0: `grinder.png` の黒背景を除去し、透過PNGへ補正。`docs/grinder_cleaner_compare_v21.5.0.png` に比較画像を追加。
+すべて 208x256 / 透過PNG / 足元基準 / 中央揃え。
+比較用画像: ../../docs/enemy_size_compare_v21.9.0.png
+棚卸し表: ../../docs/enemy_image_status_v21.8.1.tsv

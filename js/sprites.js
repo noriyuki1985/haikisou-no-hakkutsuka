@@ -524,7 +524,7 @@ function buildAllSprites(){
 }
 
 // ============================================================
-// v21.5.0: 画像アセット ↔ ゲーム要素 のマッピング層
+// v22.2.0: 画像アセット ↔ ゲーム要素 のマッピング層
 //   画像があれば立ち絵/タイル画像を返し、なければコード生成にフォールバック
 // ============================================================
 
@@ -559,13 +559,31 @@ const ENEMY_ART = {
   warden:         { dedicated:"enemy.warden",         fallback:"char.guardian",   fallbackTint:{ color:"#ffd24a", alpha:0.14 } },
 };
 
-// --- NPC body → 立ち絵キーは npc定義の body をそのまま使う(村人) ---
-const NPC_PORTRAIT = {
-  elder:    "char.logistics",   // 長老(杖を持つ logistics)
-  mechanic: "char.builder",     // 機械工(builder)
-  child:    "char.player_town", // 少年(発掘家の見習い・小さめ表示)
-  keeper:   "char.medic",       // 記録係(medic)
+// --- 村NPCの表示用ボディ定義 ---
+const NPC_BODY_ALIAS = {
+  elder: "logistics",
+  mechanic: "builder",
+  keeper: "medic",
 };
+
+const NPC_PORTRAIT = {
+  builder:   "char.builder",
+  medic:     "char.medic",
+  logistics: "char.logistics",
+  sorter:    "char.sorter",
+  child:     "char.player_town",
+};
+
+const NPC_ANIM_FRAMES = {
+  builder:   { talk:"char.npc_anim.builder_talk_0",   react:"char.npc_anim.builder_react_0" },
+  logistics: { talk:"char.npc_anim.logistics_talk_0", react:"char.npc_anim.logistics_react_0" },
+  medic:     { talk:"char.npc_anim.medic_talk_0",     react:"char.npc_anim.medic_react_0" },
+  child:     { talk:"char.npc_anim.child_talk_0",     react:"char.npc_anim.child_react_0" },
+};
+
+function resolveNpcBody(body){
+  return NPC_BODY_ALIAS[body] || body;
+}
 
 // 着色済みキャッシュ
 const _tintCache = {};
@@ -587,17 +605,64 @@ function tintedPortrait(key, tint){
   return ctx.canvas;
 }
 
-// プレイヤー立ち絵(集落/ダンジョンで切替)
-function playerPortrait(mode){
-  return ASSETS.get(mode === "village" ? "char.player_town" : "char.player_dungeon");
+// プレイヤー本格アニメーション(v22.8.1)
+const PLAYER_ANIM_FRAMES = {
+  down: {
+    idle: ["char.player_anim.down_idle_0", "char.player_anim.down_idle_1"],
+    walk: ["char.player_anim.down_walk_0", "char.player_anim.down_walk_1", "char.player_anim.down_walk_2", "char.player_anim.down_walk_3"],
+    attack: ["char.player_anim.down_attack_0"],
+    hurt: ["char.player_anim.down_hurt_0"],
+    talk: ["char.player_anim.down_talk_0"],
+  },
+  right: {
+    idle: ["char.player_anim.right_idle_0", "char.player_anim.right_idle_1"],
+    walk: ["char.player_anim.right_walk_0", "char.player_anim.right_walk_1", "char.player_anim.right_walk_2", "char.player_anim.right_walk_3"],
+    attack: ["char.player_anim.right_attack_0"],
+    hurt: ["char.player_anim.right_hurt_0"],
+    talk: ["char.player_anim.right_talk_0"],
+  },
+  up: {
+    idle: ["char.player_anim.up_idle_0", "char.player_anim.up_idle_1"],
+    walk: ["char.player_anim.up_walk_0", "char.player_anim.up_walk_1", "char.player_anim.up_walk_2", "char.player_anim.up_walk_3"],
+    attack: ["char.player_anim.up_attack_0"],
+    hurt: ["char.player_anim.up_hurt_0"],
+    talk: ["char.player_anim.up_talk_0"],
+  },
+};
+
+const PLAYER_ANIM_SPAN = {
+  idle: 520,
+  walk: 88,
+  attack: 96,
+  hurt: 150,
+  talk: 360,
+};
+
+function playerAnimDir(dir){
+  if (dir === 8 || dir === 7 || dir === 9) return "up";
+  if (dir === 2 || dir === 1 || dir === 3) return "down";
+  return "right";
+}
+
+function playerPortrait(mode, dir, state, now){
+  const d = playerAnimDir(dir || 2);
+  const set = PLAYER_ANIM_FRAMES[d] || PLAYER_ANIM_FRAMES.down;
+  const action = set[state] && set[state].length ? state : ((state === "walk") ? "walk" : "idle");
+  const frames = set[action] || set.idle;
+  const span = PLAYER_ANIM_SPAN[action] || 480;
+  const key = frames[Math.floor((now || 0) / span) % frames.length];
+  return ASSETS.get(key) || ASSETS.get("char.player_town") || ASSETS.get("char.player_dungeon");
 }
 function enemyPortrait(id){
   const art = ENEMY_ART[id] || { fallback:"char.cleaner" };
   if (art.dedicated && ASSETS.has(art.dedicated)) return ASSETS.get(art.dedicated);
   return tintedPortrait(art.fallback || "char.cleaner", art.fallbackTint);
 }
-function npcPortrait(body){
-  return ASSETS.get(NPC_PORTRAIT[body] || "char.builder");
+function npcPortrait(body, state){
+  const keyBody = resolveNpcBody(body);
+  const anim = NPC_ANIM_FRAMES[keyBody];
+  if (anim && state && anim[state] && ASSETS.has(anim[state])) return ASSETS.get(anim[state]);
+  return ASSETS.get(NPC_PORTRAIT[keyBody] || "char.builder");
 }
 
 // --- タイル画像(なければコード生成 tileSprite にフォールバック) ---
