@@ -1,0 +1,13 @@
+{
+  "project": "haikiso-no-hakkutsuka",
+  "style_ref": "style.md",
+  "characters": [
+    {
+      "id": "player_01",
+      "name": "主人公",
+      "prompt": "pixel art character, full body standing pose, transparent background",
+      "tags": ["player"],
+      "character_type": "player"
+    }
+  ]
+}
